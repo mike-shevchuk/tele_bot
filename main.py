@@ -1,5 +1,8 @@
 import asyncio
 
+import time
+import loguru
+from loguru import logger
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher,types
 import yt_dlp
@@ -24,37 +27,64 @@ print(API_TOKEN)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
+
+
+def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
+    # Set up loguru
+    timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
+    logfile_name = f'tele_bot_{data_name}'
+    dir_logs = f"logs/{log_dir}"
+    logfile_name = f"{dir_logs}/{logfile_name}_{timestr}.log"
+    fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | {level} | {message}"
+    LOGGER.remove(0)
+    LOGGER.add(logfile_name, level="DEBUG", format=fmt, colorize=False, backtrace=False, diagnose=True)
+    LOGGER.add(os.sys.stdout, level="DEBUG", format=fmt, colorize=True, backtrace=True, diagnose=True)
+
+    global logger
+    logger = LOGGER
+
+
+@dp.message(Command("start"))
+async def start_user(message:types.Message)
+    await message.answer("Hello!")
+
 @dp.message(Command("test1"))
 async def cmd_test1(message: types.Message):
+    user = message.from_user
+    logger.debug(f'{user.id} run test1')
     await message.answer(
-        f"Харе писати, <b>{message.from_user.full_name}</b>",
+        f"Харе писати, <b>{user.full_name}</b>",
         parse_mode=ParseMode.HTML
     )
 
 @dp.message(Command("test2"))
 async def cmd_test2(message: types.Message):
     user = message.from_user
+    logger.debug(f'{user.id} run test2')
     url_image = 'https://telegra.ph/file/562a512448876923e28c3.png'
     await message.answer(
         f"{hide_link(url_image)}"
         f"your user_id {user.id}"
     )
+
+
 @dp.message(lambda msg: 'youtube.com' in msg.text)
 async def handle_tiktok(message: types.Message):
     youtube_url = message.text
     user = message.from_user
-    
+
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     loc_video = f"media/{user.id}_{current_date}"
     ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=mp4]/mp4+best[height<=480]', 'outtmpl': loc_video,}
     try:
+        logger.debug(f'Start download video {loc_video}') 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
-        print(f"✅ Download successful! {loc_video=}")
+        logger.debug(f"✅ Download successful! {loc_video=}")
     except yt_dlp.utils.DownloadError as e:
-        print(f"❌ Download error: {e}")
+        logger.exception(f"❌ Download error: {e}")
     except Exception as e:
-        print(f"❌ An error occurred: {e}")
+        logger.exception(f"❌ An error occurred: {e}")
     loc_video = glob.glob(os.path.join('.', f'{loc_video}*'))[0]
 
       # Check if the file exists
@@ -63,7 +93,7 @@ async def handle_tiktok(message: types.Message):
         return
 
     # Print the file size
-    print(f"File size: {os.path.getsize(loc_video)} bytes")
+    logger.debug(f"File size: {os.path.getsize(loc_video)} bytes")
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
 
     # await bot.send_video(user.id, video)
@@ -123,8 +153,11 @@ async def handle_tiktok(message: types.Message):
 
 
 
+
+
 async def main():
-    print('Start bot')
+    setup_logger(logger)
+    logger.info('Logger setuped')
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
