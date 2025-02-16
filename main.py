@@ -39,6 +39,40 @@ async def cmd_test2(message: types.Message):
         f"{hide_link(url_image)}"
         f"your user_id {user.id}"
     )
+@dp.message(lambda msg: 'youtube.com' in msg.text)
+async def handle_tiktok(message: types.Message):
+    youtube_url = message.text
+    user = message.from_user
+    
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    loc_video = f"media/{user.id}_{current_date}"
+    ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=mp4]/mp4+best[height<=480]', 'outtmpl': loc_video,}
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+        print(f"✅ Download successful! {loc_video=}")
+    except yt_dlp.utils.DownloadError as e:
+        print(f"❌ Download error: {e}")
+    except Exception as e:
+        print(f"❌ An error occurred: {e}")
+    loc_video = glob.glob(os.path.join('.', f'{loc_video}*'))[0]
+
+      # Check if the file exists
+    if not os.path.exists(loc_video):
+        await message.reply(f"The video file does not exist. {loc_video=}")
+        return
+
+    # Print the file size
+    print(f"File size: {os.path.getsize(loc_video)} bytes")
+    # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
+
+    # await bot.send_video(user.id, video)
+
+    # Open and send the video file
+    try:
+        await message.answer_video(video=types.FSInputFile(loc_video))
+    except Exception as e:
+        await message.reply(f"An error occurred while sending the video: {e}")
 
 
 @dp.message(lambda msg: 'tiktok.com' in msg.text)
