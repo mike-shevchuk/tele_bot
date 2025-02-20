@@ -45,7 +45,7 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
 
 
 @dp.message(Command("start"))
-async def start_user(message:types.Message)
+async def start_user(message:types.Message):
     await message.answer("Hello!")
 
 @dp.message(Command("test1"))
@@ -109,7 +109,7 @@ async def handle_tiktok(message: types.Message):
 async def handle_tiktok(message: types.Message):
     tiktok_url = message.text
     user = message.from_user
-    
+
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     loc_video = f"media/{user.id}_{current_date}"
 
