@@ -170,5 +170,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .python-version
+
+
+
 media
 assets
+
+*_test*.py
