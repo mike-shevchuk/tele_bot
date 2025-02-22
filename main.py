@@ -1,30 +1,28 @@
-import asyncio
-from aiogram import F
 import time
-import loguru
-from loguru import logger
-from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
-import yt_dlp
 from datetime import datetime
-
-from aiogram.filters.command import Command
-from aiogram.utils.markdown import hide_link
-from aiogram.enums import ParseMode
-
 import glob
 import os
 import requests
 from pathlib import Path
 
+import asyncio
+import yt_dlp
+from dotenv import load_dotenv
+import loguru
+from loguru import logger
+
+
+from aiogram import F
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters.command import Command
+from aiogram.utils.markdown import hide_link
+from aiogram.enums import ParseMode
+
 
 user_data = {}
-
 load_dotenv()
 
 API_TOKEN = os.getenv('TOKEN')
-
-print(API_TOKEN)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -37,11 +35,13 @@ vid_format_dict = {
     '854x480': '480p',
     '1280x720': 'HD',
     '1920x1080': 'Full HD',
-    '2560x1440': 'Quad HD',
+    '2560x1440': '2K',
     '3840x2160': '4K',
     '7680x4320': '8K',
     # Add more mappings as needed
 }
+
+
 def human_readable(file_size, unit='B'):
     if file_size > 1024 * 1024:
         file_size /=  1024 * 1024
@@ -52,7 +52,6 @@ def human_readable(file_size, unit='B'):
     return f"{file_size:.2f} {unit}"
 
 
-
 def expand_url(url):
     try:
         response = requests.head(url, allow_redirects=True)
@@ -61,10 +60,12 @@ def expand_url(url):
         print(f"Error expanding URL: {e}")
         return url
 
+
 def list_formats(video_url):
     video_url = expand_url(video_url)
 
     # Options for yt-dlp
+    # TODO: format not worl
     min_format=420
     max_format=1080
     ydl_opts = {
@@ -78,12 +79,9 @@ def list_formats(video_url):
             formats = info_dict.get('formats', [])
             return formats
         except yt_dlp.utils.DownloadError as e:
-            #TODO: logger 
             logger.debug(f"An error occurred: {e}")
-            # print(f"An error occurred: {e}")
         except Exception as e:
-            #TODO: logger 
-            print(f"An unexpected error occurred: {e}")
+            logger.debug(f"An unexpected error occurred: {e}")
 
 
 def get_keyboard(link):
@@ -97,11 +95,8 @@ def get_keyboard(link):
             ext = fmt['ext']
             if ext == 'webm':
                 continue
-            try:
-                resolution = vid_format_dict[resolution]
-            except:
-                None
-            
+
+            resolution = vid_format_dict.get(resolution, resolution)
 
             buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {human_readable(filesize)}", callback_data=f"vid_{format_id}"))
 
@@ -119,10 +114,10 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
     logfile_name = f'tele_bot_{data_name}'
     dir_logs = f"logs/{log_dir}"
     logfile_name = f"{dir_logs}/{logfile_name}_{timestr}.log"
-    fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | {level} | {message}"
+    fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | <level>{level}</level> | <level>{message}</level>"
     LOGGER.remove(0)
     LOGGER.add(logfile_name, level="DEBUG", format=fmt, colorize=False, backtrace=False, diagnose=True)
-    LOGGER.add(os.sys.stdout, level="DEBUG", format=fmt, colorize=True, backtrace=True, diagnose=True)
+    LOGGER.add(os.sys.stdout, level="TRACE", format=fmt, colorize=True, backtrace=True, diagnose=True)
 
     global logger
     logger = LOGGER
@@ -132,19 +127,21 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
 async def start_user(message:types.Message):
     await message.answer("Hello!")
 
+
 @dp.message(Command("test1"))
 async def cmd_test1(message: types.Message):
     user = message.from_user
-    logger.debug(f'{user.id} run test1')
+    logger.trace(f'{user.id} run test1')
     await message.answer(
         f"Харе писати, <b>{user.full_name}</b>",
         parse_mode=ParseMode.HTML
     )
 
+
 @dp.message(Command("test2"))
 async def cmd_test2(message: types.Message):
     user = message.from_user
-    logger.debug(f'{user.id} run test2')
+    logger.trace(f'{user.id} run test2')
     url_image = 'https://telegra.ph/file/562a512448876923e28c3.png'
     await message.answer(
         f"{hide_link(url_image)}"
@@ -155,10 +152,18 @@ async def cmd_test2(message: types.Message):
 
 @dp.message(lambda msg: any(link in msg.text for link in ['youtu.be', 'youtube.com']))
 async def cmd_numbers(message: types.Message):
+    user = message.from_user
+    wait_bot_msg = await message.reply("Твоя лінка на youtube повідомлення опрацьовується!")
     link = message.text
     #TODO: make better not now
+    logger.success(f'Хапнули лінку {link} --> {user.id}')
     user_data[message.from_user.id] = link  # Save the link to user_data
-    await message.answer("Яке хочете розширення?", reply_markup=get_keyboard(link))
+    await message.reply(f"Яке хочете розширення? \n {link}\n повідомлення {user.username}", reply_markup=get_keyboard(link))
+    # await message.delete()
+    await wait_bot_msg.delete()
+    
+
+
 
 
 @dp.callback_query(F.data.startswith("vid"))
@@ -189,9 +194,11 @@ async def handle_callback(callback_query: types.CallbackQuery):
 
     try:
         # TODO: Add async not now
+        strt_dwn_msg = await callback_query.message.answer("Start downloading ...")
         logger.debug(f'Start download video {loc_video}') 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
+        await strt_dwn_msg.delete()
         logger.debug(f"✅ Download successful! {loc_video=}")
     except yt_dlp.utils.DownloadError as e:
         #TODO: logger
@@ -203,6 +210,8 @@ async def handle_callback(callback_query: types.CallbackQuery):
         logger.exception(f"❌ An error occurred: {e}")
         await callback_query.message.reply(f"An error occurred: {e}")
         return
+
+    info_wait_button = await callback_query.message.reply(f"✅ Download successful!\nSending video")
 
     # Check if the file exists
     loc_video = glob.glob(os.path.join('.', f'{loc_video}*'))[0]
@@ -217,10 +226,20 @@ async def handle_callback(callback_query: types.CallbackQuery):
     # Send the video file
     #TODO: logger
     try:
+
+        #HACK: delete later
+        if loc_video.endswith('mp4'):
+            await callback_query.message.answer_video(video=types.FSInputFile(loc_video))
+        else:
+            await callback_query.message.answer_audio(audio=types.FSInputFile(loc_video), caption = 'music', title='shit music')
         # If audio only send message.answer_musick or answer_audio check it
-        await callback_query.message.answer_video(video=types.FSInputFile(loc_video))
+        # await callback_query.message.answer_music(video=types.FSInputFile(loc_video))
+        
     except Exception as e:
         await callback_query.message.reply(f"An error occurred while sending the video: {e}")
+    
+    await callback_query.message.delete()
+    await info_wait_button.delete()
 
 
 
