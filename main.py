@@ -201,12 +201,11 @@ async def handle_callback(callback_query: types.CallbackQuery):
         await strt_dwn_msg.delete()
         logger.debug(f"✅ Download successful! {loc_video=}")
     except yt_dlp.utils.DownloadError as e:
-        #TODO: logger
+
         logger.exception(f"❌ Download error: {e}")
         await callback_query.message.reply(f"Download error: {e}")
         return
     except Exception as e:
-        #TODO: logger
         logger.exception(f"❌ An error occurred: {e}")
         await callback_query.message.reply(f"An error occurred: {e}")
         return
@@ -220,11 +219,7 @@ async def handle_callback(callback_query: types.CallbackQuery):
         return
 
     # Print the file size
-    #TODO: logger
     logger.debug(f"File size: {human_readable(os.path.getsize(loc_video))}")
-
-    # Send the video file
-    #TODO: logger
     try:
 
         #HACK: delete later
@@ -265,14 +260,11 @@ async def handle_tiktok(message: types.Message):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([tiktok_url])
         # await message.edit_caption(caption="✅ Download successful!")
-        # TODO: make logger
-        print(f"✅ Download successful! {loc_video=}")
+        logger.exception(f"✅ Download successful! {loc_video=}")
     except yt_dlp.utils.DownloadError as e:
-        # TODO: make logger
-        print(f"❌ Download error: {e}")
+        logger.exception(f"❌ Download error: {e}")
     except Exception as e:
-        # TODO: make logger
-        print(f"❌ An error occurred: {e}")
+        logger.exception(f"❌ An error occurred: {e}")
 
 
     loc_video = glob.glob(os.path.join('.', f'{loc_video}*'))[0]
@@ -282,7 +274,7 @@ async def handle_tiktok(message: types.Message):
         await message.reply(f"The video file does not exist. {loc_video=}")
         return
 
-    logger.debug(f"File size: {human_readable(os.path.getsize(loc_video))}")
+    logger.exception(f"File size: {human_readable(os.path.getsize(loc_video))}")
 
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
     try:
@@ -292,6 +284,49 @@ async def handle_tiktok(message: types.Message):
 
     #TODO: show awailable limit for user
     # await message.answer(f'Твоє відео {tiktok_url}')
+
+
+@dp.message(lambda msg: 'instagram.com' in msg.text)
+async def handle_tiktok(message: types.Message):
+    inst_url = message.text
+    user = message.from_user
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    loc_video = f"media/{user.id}/{current_date}"
+
+    ydl_opts = {
+        'format': 'bestvideo+bestaudio/best',
+        'outtmpl': loc_video,
+        # 'outtmpl' : '%(title)s.%(ext)s'
+    }
+
+    try:
+        # TODO: make async not now
+        # TODO: add captions not now
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([inst_url])
+        # await message.edit_caption(caption="✅ Download successful!")
+        logger.exception(f"✅ Download successful! {loc_video=}")
+    except yt_dlp.utils.DownloadError as e:
+        logger.exception(f"❌ Download error: {e}")
+    except Exception as e:
+        logger.exception(f"❌ An error occurred: {e}")
+
+
+    loc_video = glob.glob(os.path.join('.', f'{loc_video}*'))[0]
+
+      # Check if the file exists
+    if not os.path.exists(loc_video):
+        await message.reply(f"The video file does not exist. {loc_video=}")
+        return
+
+    logger.exception(f"File size: {human_readable(os.path.getsize(loc_video))}")
+
+    # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
+    try:
+        await message.answer_video(video=types.FSInputFile(loc_video))
+    except Exception as e:
+        await message.reply(f"An error occurred while sending the video: {e}")
 
 
 async def main():
