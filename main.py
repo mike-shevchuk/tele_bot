@@ -38,7 +38,6 @@ vid_format_dict = {
     '2560x1440': '2K',
     '3840x2160': '4K',
     '7680x4320': '8K',
-    # Add more mappings as needed
 }
 
 
@@ -165,10 +164,7 @@ async def cmd_numbers(message: types.Message):
 
 
 async def get_dwn_media(ydl_opts, user_msg, youtubeLink=''):
-    if youtubeLink:
-        med_url = youtubeLink
-    else:
-        med_url = user_msg.text
+    med_url = youtubeLink if youtubeLink else user_msg.text
 
     loc_video = ydl_opts['outtmpl']
 
@@ -191,9 +187,6 @@ async def get_dwn_media(ydl_opts, user_msg, youtubeLink=''):
         await user_msg.reply(f"An error occurred: {e}")
 
 
-
-
-
     loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
 
     loc_video  = loc_match[0]
@@ -212,9 +205,6 @@ async def get_dwn_media(ydl_opts, user_msg, youtubeLink=''):
     # await message.answer(f'Твоє відео {tiktok_url}')
 
     return loc_video
-
-
-
 
 
 @dp.callback_query(F.data.startswith("vid"))
@@ -248,37 +238,6 @@ async def handle_callback(callback_query: types.CallbackQuery):
 
     info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video")
 
-    # try:
-    #     # TODO: Add async not now
-    #     strt_dwn_msg = await bot_msg.answer("Start downloading ...")
-    #     logger.debug(f'Start download video {loc_media}') 
-    #     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    #         ydl.download([youtube_url])
-    #     await strt_dwn_msg.delete()
-    #     logger.debug(f"✅ Download successful! {loc_media=}")
-    # except yt_dlp.utils.DownloadError as e:
-
-    #     logger.exception(f"❌ Download error: {e}")
-    #     await bot_msg.reply(f"Download error: {e}")
-    #     return
-    # except Exception as e:
-    #     logger.exception(f"❌ An error occurred: {e}")
-    #     await bot_msg.reply(f"An error occurred: {e}")
-    #     return
-
-    # info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video")
-
-    # # Check if the file exists
-    # loc_media = glob.glob(os.path.join('.', f'{loc_media}*'))[0]
-    # if not os.path.exists(loc_media):
-    #     await bot_msg.reply(f"The video file does not exist. {loc_media=}")
-    #     return
-
-    # # Print the file size
-    # logger.debug(f"File size: {human_readable(os.path.getsize(loc_media))}")
-
-
-
     try:
 
         #HACK: delete later
@@ -287,15 +246,12 @@ async def handle_callback(callback_query: types.CallbackQuery):
         else:
             await bot_msg.message.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title='shit music')
         # If audio only send message.answer_musick or answer_audio check it
-        # await callback_query.message.answer_music(video=types.FSInputFile(loc_video))
         
     except Exception as e:
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
     
     await bot_msg.delete()
     await info_wait_button.delete()
-
-
 
 
         
