@@ -57,7 +57,7 @@ def expand_url(url):
         response = requests.head(url, allow_redirects=True)
         return response.url
     except requests.RequestException as e:
-        print(f"Error expanding URL: {e}")
+        logger.exception(f"Error expanding URL: {e}")
         return url
 
 
@@ -175,7 +175,7 @@ async def handle_callback(callback_query: types.CallbackQuery):
 
     if not youtube_url:
         # TODO: add logger
-        await callback_query.message.reply("Помилка: URL не знайдено.")
+        await callback_query.message.reply(f"Помилка: URL не знайдено. {youtube_url}")
         return
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -224,9 +224,9 @@ async def handle_callback(callback_query: types.CallbackQuery):
 
         #HACK: delete later
         if loc_video.endswith('mp4'):
-            await callback_query.message.answer_video(video=types.FSInputFile(loc_video))
+            await callback_query.message.answer_video(video=types.FSInputFile(loc_video), caption = f'@med_link_bot\n\n{youtube_url}')
         else:
-            await callback_query.message.answer_audio(audio=types.FSInputFile(loc_video), caption = 'music', title='shit music')
+            await callback_query.message.answer_audio(audio=types.FSInputFile(loc_video), caption = f'@med_link_bot\n\nmusic', title='shit music')
         # If audio only send message.answer_musick or answer_audio check it
         # await callback_query.message.answer_music(video=types.FSInputFile(loc_video))
         
@@ -260,7 +260,7 @@ async def handle_tiktok(message: types.Message):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([tiktok_url])
         # await message.edit_caption(caption="✅ Download successful!")
-        logger.exception(f"✅ Download successful! {loc_video=}")
+        logger.success(f"✅ Download successful! {loc_video=}")
     except yt_dlp.utils.DownloadError as e:
         logger.exception(f"❌ Download error: {e}")
     except Exception as e:
@@ -278,7 +278,7 @@ async def handle_tiktok(message: types.Message):
 
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
     try:
-        await message.answer_video(video=types.FSInputFile(loc_video))
+        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{tiktok_url}')
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
 
@@ -324,7 +324,7 @@ async def handle_tiktok(message: types.Message):
 
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
     try:
-        await message.answer_video(video=types.FSInputFile(loc_video))
+        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{inst_url}')
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
 
