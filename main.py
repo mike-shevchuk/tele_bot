@@ -182,9 +182,11 @@ async def get_dwn_media(ydl_opts, user_msg, youtubeLink=''):
     except yt_dlp.utils.DownloadError as e:
         logger.error(f"❌ Download error: {e}")
         await user_msg.reply(f"Download error: {e}")
+        return
     except Exception as e:
         logger.exception(f"❌ An error occurred: {e}")
         await user_msg.reply(f"An error occurred: {e}")
+        return
 
 
     loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
