@@ -7,6 +7,7 @@ instaloader==4.14.1
 jaraco.collections==5.1.0
 loguru==0.7.3
 packaging==24.2
+pandas==2.2.3
 pip-chill==1.0.3
 platformdirs==4.2.2
 playwright==1.50.0

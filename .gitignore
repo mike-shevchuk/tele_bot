@@ -177,3 +177,4 @@ media
 assets
 
 *_test*.py
+data/reg_user.csv

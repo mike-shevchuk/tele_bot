@@ -8,8 +8,10 @@ from pathlib import Path
 import asyncio
 import yt_dlp
 from dotenv import load_dotenv
+import pandas as pd
 import loguru
 from loguru import logger
+import shutil
 
 
 from aiogram import F
@@ -17,6 +19,9 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
 from aiogram.utils.markdown import hide_link
 from aiogram.enums import ParseMode
+
+from src.UserTele import UserTele
+from src import utils as ut
 
 
 user_data = {}
@@ -41,27 +46,14 @@ vid_format_dict = {
 }
 
 
-def human_readable(file_size, unit='B'):
-    if file_size > 1024 * 1024:
-        file_size /=  1024 * 1024
-        unit = 'MB'
-    elif file_size > 1024:
-        file_size /= 1024
-        unit = 'KB'
-    return f"{file_size:.2f} {unit}"
 
 
-def expand_url(url):
-    try:
-        response = requests.head(url, allow_redirects=True)
-        return response.url
-    except requests.RequestException as e:
-        logger.exception(f"Error expanding URL: {e}")
-        return url
+
+
 
 
 def list_formats(video_url):
-    video_url = expand_url(video_url)
+    video_url = ut.expand_url(video_url)
 
     # Options for yt-dlp
     # TODO: format not worl
@@ -83,6 +75,8 @@ def list_formats(video_url):
             logger.debug(f"An unexpected error occurred: {e}")
 
 
+
+#TODO: log that start collect formats
 def get_keyboard(link):
     formats = list_formats(link)
     buttons = []
@@ -97,7 +91,7 @@ def get_keyboard(link):
 
             resolution = vid_format_dict.get(resolution, resolution)
 
-            buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {human_readable(filesize)}", callback_data=f"vid_{format_id}"))
+            buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(filesize)}", callback_data=f"vid_{format_id}"))
 
     if not buttons:
         buttons.append(types.InlineKeyboardButton(text="No formats with filesize available", callback_data="no_formats"))
@@ -122,9 +116,71 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
     logger = LOGGER
 
 
+# @loguru.catch()
 @dp.message(Command("start"))
 async def start_user(message:types.Message):
-    await message.answer("Hello!")
+    users_reg_df: pd.DataFrame  = ut.get_reg_users()
+
+    user = message.from_user
+
+
+    try:
+        usr = UserTele(
+            id = user.id,
+            # chat_id = user.chat_id,
+            first_name = user.first_name,
+            full_name = user.full_name,
+            username = user.username,
+            is_bot = user.is_bot,
+            is_premium = user.is_premium,
+            language_code = user.language_code,
+            last_name = user.last_name
+        )
+    except Exception as e:
+        logger.exception(f'Except user reg {e}')
+
+
+    # TODO: get from db
+    if len(users_reg_df) < 1:
+        # TODO: check later
+        users = [usr]
+        df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
+        # df.set_index('id')
+        logger.trace(df)
+        ut.save_reg_user(df)
+        logger.success('First user')
+        await  message.answer("You are the best")
+        return 
+
+
+    
+    try:
+        user_match = users_reg_df.loc[users_reg_df.id == usr.id]
+        user_match.set_index('id', inplace=True)
+
+
+        if len(user_match):
+            # usr_temp = user_match.loc[usr.id]
+            id_t = usr.id
+            logger.debug(f'User {id_t} is already registered ')
+            await message.answer(f'Скучали за тобою {id_t}')
+            return 
+
+        else:
+            users = [usr]
+            df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
+            df.set_index('id')
+            all_df = pd.concat([users_reg_df, df]).reset_index(drop=True)
+            logger.debug(f'Add new user {usr.id} ')
+            # users_reg_df += pd.DataFrame(usr)
+            ut.save_reg_user(all_df)
+            await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
+    except Exception as e:
+        logger.exception(f'Exception {e}')
+
+
+    
+
 
 
 @dp.message(Command("test1"))
@@ -199,7 +255,7 @@ async def get_dwn_media(ydl_opts, user_msg, youtubeLink=''):
         return 
 
     
-    logger.info(f"File size: {human_readable(os.path.getsize(loc_video))}")
+    logger.info(f"File size: {ut.human_readable(os.path.getsize(loc_video))}")
 
     
 
@@ -304,6 +360,10 @@ async def handle_instagram(message: types.Message):
 
 
 async def main():
+    root_prj = Path(__file__).parent.absolute()
+    logger.success(f'{root_prj=}')
+    # os.remove(root_prj / 'data' / 'reg_user.csv' )
+    # os.rmdir(root_prj / 'data')
     setup_logger(logger)
     logger.info('Logger setuped')
     await dp.start_polling(bot)
