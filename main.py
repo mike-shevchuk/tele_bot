@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import pandas as pd
 import loguru
 from loguru import logger
+import shutil
 
 
 from aiogram import F
@@ -142,8 +143,10 @@ async def start_user(message:types.Message):
     # TODO: get from db
     if len(users_reg_df) < 1:
         # TODO: check later
-        df = pd.DataFrame([usr.to_dict()])
-        print(df)
+        users = [usr]
+        df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
+        # df.set_index('id')
+        logger.trace(df)
         ut.save_reg_user(df)
         logger.success('First user')
         await  message.answer("You are the best")
@@ -153,40 +156,28 @@ async def start_user(message:types.Message):
     
     try:
         user_match = users_reg_df.loc[users_reg_df.id == usr.id]
+        user_match.set_index('id', inplace=True)
+
 
         if len(user_match):
-            ...
-            # TODO: check later
-            # usr_temp = user_match.loc[0]
-            # id_t = usr_temp.id
-            # logger.debug(f'User {id_t} is already registered ')
-            # await message.answer(f'Скучали за тобою {id_t}')
-            # return 
+            # usr_temp = user_match.loc[usr.id]
+            id_t = usr.id
+            logger.debug(f'User {id_t} is already registered ')
+            await message.answer(f'Скучали за тобою {id_t}')
+            return 
 
         else:
-            ...
-            # TODO: check later
-            # df = pd.DataFrame([usr.to_dict()])
-            # pd.concat([users_reg_df, df])
-            # logger.debug(f'Add new user {usr.id} ')
-            # # users_reg_df += pd.DataFrame(usr)
-            # ut.save_reg_user(users_reg_df)
-            # await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
+            users = [usr]
+            df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
+            df.set_index('id')
+            all_df = pd.concat([users_reg_df, df]).reset_index(drop=True)
+            logger.debug(f'Add new user {usr.id} ')
+            # users_reg_df += pd.DataFrame(usr)
+            ut.save_reg_user(all_df)
+            await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
     except Exception as e:
         logger.exception(f'Exception {e}')
 
-
-
-    
-
-
-
-
-    print(user)
-
-
-
-    # TODO: add to pandas file about users
 
     
 
@@ -368,6 +359,10 @@ async def handle_instagram(message: types.Message):
 
 
 async def main():
+    root_prj = Path(__file__).parent.absolute()
+    logger.success(f'{root_prj=}')
+    # os.remove(root_prj / 'data' / 'reg_user.csv' )
+    # os.rmdir(root_prj / 'data')
     setup_logger(logger)
     logger.info('Logger setuped')
     await dp.start_polling(bot)

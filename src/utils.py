@@ -16,7 +16,7 @@ def get_reg_users():
         return df
     else:
         print('not exist')
-        res = pd.DataFrame()
+        res = pd.DataFrame().reset_index(drop=True)
         res.to_csv(reg_user_path)
         return res
         
@@ -29,7 +29,7 @@ def get_reg_users():
 
 def save_reg_user(df):
     reg_user_path = root_prj / 'data/reg_user.csv'
-    df.to_csv(reg_user_path)
+    df.to_csv(reg_user_path, index=False)
 
 
 
