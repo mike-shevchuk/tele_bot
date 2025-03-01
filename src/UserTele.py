@@ -15,7 +15,7 @@ class UserTele(BaseModel):
     id: int
     # chat_id: int
     is_bot: bool
-    language_code: str
+    language_code:  Union[str, None]
     
     username: Union[str, None] = Field(default='uknown')
     full_name: str = Field(default='uknown')
