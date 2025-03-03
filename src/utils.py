@@ -1,6 +1,10 @@
 from pathlib import Path
 import pandas as pd
 import requests
+import os
+import loguru
+import time
+
 
 root_prj = Path(__file__).parent.parent.absolute()
 
@@ -32,6 +36,21 @@ def save_reg_user(df):
     df.to_csv(reg_user_path, index=False)
 
 
+
+def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
+    # Set up loguru
+    timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
+    logfile_name = f'tele_bot_{data_name}'
+    dir_logs = f"logs/{log_dir}"
+    logfile_name = f"{dir_logs}/{logfile_name}_{timestr}.log"
+    fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | <level>{level}</level> | <level>{message}</level>"
+    LOGGER.remove(0)
+    LOGGER.add(logfile_name, level="DEBUG", format=fmt, colorize=False, backtrace=False, diagnose=True)
+    LOGGER.add(os.sys.stdout, level="TRACE", format=fmt, colorize=True, backtrace=True, diagnose=True)
+
+    global logger
+    logger = LOGGER
+    return logger
 
 
 
