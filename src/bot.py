@@ -7,7 +7,7 @@ import os
 
 from aiogram import types
 
-
+LIMIT_SIZE_UPL_VIDEO = 49
 
 vid_format_dict = {
     'audio only': '🎧',
@@ -107,18 +107,30 @@ class Bot_Func:
     def get_keyboard(self, link):
         formats = self._list_formats(link)
         buttons = []
+        all_audio_size = [0]
         for fmt in formats:
             format_id = fmt.get('format_id')
             filesize = fmt.get('filesize')
-            if filesize:
-                resolution = fmt.get('resolution')
-                ext = fmt['ext']
-                if ext == 'webm':
-                    continue
+            resolution = fmt.get('resolution')
+            resolution = vid_format_dict.get(resolution, resolution)
 
-                resolution = vid_format_dict.get(resolution, resolution)
+            IsVideo = False
+            ext = fmt['ext']
 
-                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(filesize)}", callback_data=f"vid_{format_id}"))
+
+            if ext == 'webm' or not filesize:
+                continue
+
+            if ext == 'm4a':
+                all_audio_size.append(filesize)
+
+            if ext == 'mp4':
+                IsVideo = True
+
+            real_size = (filesize, filesize + max(all_audio_size))[IsVideo]
+
+            if (filesize and real_size < LIMIT_SIZE_UPL_VIDEO * 1024 * 1024):
+                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(real_size)}", callback_data=f"vid_{format_id}"))
 
         if not buttons:
             buttons.append(types.InlineKeyboardButton(text="No formats with filesize available", callback_data="no_formats"))
