@@ -14,8 +14,11 @@ from aiogram.utils.markdown import hide_link
 from aiogram.enums import ParseMode
 
 from src.UserTele import UserTele
+from src.UserTele import Level
 from src.bot import Bot_Func
 from src import utils as ut
+
+from src.ExceptionClass import CSVError
 
 user_data = {}
 load_dotenv()
@@ -25,10 +28,9 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
-@dp.message(Command("start"))
-async def start_user(message:types.Message):
-    users_reg_df: pd.DataFrame  = ut.get_reg_users()
-    user = message.from_user
+
+
+def get_user_tele(user):
 
     try:
         usr = UserTele(
@@ -45,42 +47,51 @@ async def start_user(message:types.Message):
     except Exception as e:
         logger.exception(f'Except user reg {e}')
 
+    return usr
 
-    # TODO: get from db
-    if len(users_reg_df) < 1:
+
+        
+# except Exception as e:
+#     logger.exception(f'Exception {e}')
+
+
+
+
+
+
+
+@dp.message(Command("start"))
+async def start_user(message:types.Message):
+    user_telegram = message.from_user
+
+    usr = get_user_tele(user_telegram)
+
+    try:
+        user_tele = ut.get_user_by_id(usr.id)
+    except CSVError:
+        # INFO: db is empty
+
+        ut.reg_user_db(usr)
         # TODO: check later
-        users = [usr]
-        df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
+        # users = [usr_tele]
+        # df = pd.DataFrame([us.to_dict() for us in users])
         # df.set_index('id')
-        logger.trace(df)
-        ut.save_reg_user(df)
-        logger.success('First user')
-        await  message.answer("You are the best")
+        # logger.trace(df)
+        # ut.save_reg_user(df)
+        logger.success('First user reg {usr_tele.id}')
+        await  message.answer(f"You are the best, you are the first {usr.id}")
         return 
     
-    try:
-        user_match = users_reg_df.loc[users_reg_df.id == usr.id]
-        user_match.set_index('id', inplace=True)
+    if user_tele.empty:
+        await message.answer(f'Ти хто {usr}? ми тебе пробиваємо')
+        ut.reg_user_db(usr)
+        
+    else:
+        logger.success('oldfun {user_tele.id}')
+        await message.answer(f'Скучали за тобою {user_tele.id}')
+        return
+        
 
-
-        if len(user_match):
-            # usr_temp = user_match.loc[usr.id]
-            id_t = usr.id
-            logger.debug(f'User {id_t} is already registered ')
-            await message.answer(f'Скучали за тобою {id_t}')
-            return 
-
-        else:
-            users = [usr]
-            df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
-            df.set_index('id')
-            all_df = pd.concat([users_reg_df, df]).reset_index(drop=True)
-            logger.debug(f'Add new user {usr.id} ')
-            # users_reg_df += pd.DataFrame(usr)
-            ut.save_reg_user(all_df)
-            await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
-    except Exception as e:
-        logger.exception(f'Exception {e}')
 
 
 @dp.message(Command("test1"))
@@ -99,7 +110,6 @@ async def cmd_test2(message: types.Message):
         f"{hide_link(url_image)}"
         f"your user_id {user.id}"
     )
-
 
 
 @dp.message(lambda msg: any(link in msg.text for link in ['youtu.be', 'youtube.com']))
@@ -150,7 +160,10 @@ async def handle_callback(callback_query: types.CallbackQuery):
         else:
             await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title='shit music')
         # If audio only send message.answer_musick or answer_audio check it
-        
+        file_size = ut.get_file_size(loc_media)
+        logger.info(f'{file_size}')
+        logger.trace(f'{loc_media=}')
+        ut.delete_video_file(loc_media)
     except Exception as e:
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
     
@@ -161,8 +174,38 @@ async def handle_callback(callback_query: types.CallbackQuery):
 @dp.message(lambda msg: any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
 async def handle_inst_tick(message: types.Message):
     user = message.from_user
+
+    user = message.from_user
+
+    user_tele = get_user_tele(user)
+    print(user_tele)
+    try:
+        user = ut.get_user_by_id(user_tele.id)
+        logger.info(f'{user=}')
+    except CSVError as e:
+        logger.warning('csv is empty or not exist {e}')
+        await message.reply('Перевірте чи ви є учасником групи команда /start, якщо є то наразі бот на технічній перерві')
+        return
+    except Exception as e:
+        await message.reply('Бот на технічній перерві')
+        logger.error(f'exception in tiktok instagram {e}')
+        return
+
+    if not user:
+        await message.reply('ТИ не зареєстований пропиши команду /start')
+        return
+    
+
+    avail_mem = user.level.value * 1024 * 1024 - user.use_memory
+    logger.trace(f'{avail_mem=}')
+
+    if avail_mem < 0:
+        await message.reply('ТИ використав свій ліміт для збільшення ліміту пиши адміну @pishov_nahuy')
+        return
+    
+
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_video = f"media/{user.id}/{current_date}"
+    loc_video = f"media/{user_tele.id}/{current_date}"
 
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
@@ -170,11 +213,22 @@ async def handle_inst_tick(message: types.Message):
     }
 
     loc_video = await bot_func.get_dwn_media(ydl_opts, message)
+
+
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
     try:
-        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{message.text}')
+        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{message.text} ')
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
+
+    file_size = ut.get_file_size(loc_video)
+    user.use_memory +=  file_size
+
+
+    # ut.save_reg_user(df)
+    logger.trace(f'{loc_video=}')
+    ut.delete_video_file(loc_video)
+    ut.update_reg_user(user)
 
 
 async def main():
