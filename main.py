@@ -7,11 +7,14 @@ from dotenv import load_dotenv
 import pandas as pd
 import loguru
 
-from aiogram import F
-from aiogram import Bot, Dispatcher, types
+
+from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
-from aiogram.utils.markdown import hide_link
-from aiogram.enums import ParseMode
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from src.MiddleWare import SharedContextMiddleware
+from handlers import test_bot
+
+# from aiogram.filters import Text
 
 from src.UserTele import UserTele
 from src.bot import Bot_Func
@@ -81,24 +84,6 @@ async def start_user(message:types.Message):
             await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
     except Exception as e:
         logger.exception(f'Exception {e}')
-
-
-@dp.message(Command("test1"))
-async def cmd_test1(message: types.Message):
-    user = message.from_user
-    logger.trace(f'{user.id} run test1')
-    await message.answer(f"Харе писати, <b>{user.full_name}</b>",parse_mode=ParseMode.HTML)
-
-
-@dp.message(Command("test2"))
-async def cmd_test2(message: types.Message):
-    user = message.from_user
-    logger.trace(f'{user.id} run test2')
-    url_image = 'https://telegra.ph/file/562a512448876923e28c3.png'
-    await message.answer(
-        f"{hide_link(url_image)}"
-        f"your user_id {user.id}"
-    )
 
 
 
@@ -187,10 +172,17 @@ async def main():
     #HACK: delete in future
     global bot_func
     bot_func = Bot_Func(log=logger, root_prj=root_prj)
-    logger.info('Bot Funk setuped')
-
+    logger.info('Bot Func setuped')
+    sharedContextMiddleware = SharedContextMiddleware(logger=logger, foo = 42,bar = "Bazz")
+    # dp.message.middleware(sharedContextMiddleware)
+    dp.update.middleware(sharedContextMiddleware)
+    
+    dp.include_routers(test_bot.router)
     await dp.start_polling(bot)
+
+
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+    # executor.start_polling(dp, loop=loop, skip_updates=True)
