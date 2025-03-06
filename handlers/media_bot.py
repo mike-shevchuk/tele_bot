@@ -54,9 +54,9 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     try:
         #HACK: delete later
         if loc_media.endswith('mp4'):
-            await bot_msg.answer_video(video=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\n{youtube_url}', title='Video title')
+            await bot_msg.answer_video(video=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\n{youtube_url}', title=title)
         else:
-            await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title='Music title')
+            await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title=title)
         # If audio only send message.answer_musick or answer_audio check it
         
     except Exception as e:
