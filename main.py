@@ -16,9 +16,18 @@ from handlers import test_bot
 
 # from aiogram.filters import Text
 
-from src.UserTele import UserTele
+from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram.filters.command import Command
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from src.MiddleWare import SharedContextMiddleware
+from handlers import test_bot, media_bot
+
+# from aiogram.filters import Text
+
+from src.Users import UserTele
 from src.bot import Bot_Func
 from src import utils as ut
+from src.bot import CommonParam
 
 user_data = {}
 load_dotenv()
@@ -31,60 +40,34 @@ dp = Dispatcher()
 @dp.message(Command("start"))
 async def start_user(message:types.Message):
     users_reg_df: pd.DataFrame  = ut.get_reg_users()
-    user = message.from_user
+    user_org = message.from_user
 
     try:
         usr = UserTele(
-            id = user.id,
+            id = user_org.id,
             # chat_id = user.chat_id,
-            first_name = user.first_name,
-            full_name = user.full_name,
-            username = user.username,
-            is_bot = user.is_bot,
-            is_premium = user.is_premium,
-            language_code = user.language_code,
-            last_name = user.last_name
+            first_name = user_org.first_name,
+            full_name = user_org.full_name,
+            username = user_org.username,
+            is_bot = user_org.is_bot,
+            is_premium = user_org.is_premium,
+            language_code = user_org.language_code,
+            last_name = user_org.last_name
         )
     except Exception as e:
         logger.exception(f'Except user reg {e}')
 
+    user = ut.get_user_by_id(usr.id)
 
-    # TODO: get from db
-    if len(users_reg_df) < 1:
-        # TODO: check later
-        users = [usr]
-        df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
-        # df.set_index('id')
-        logger.trace(df)
-        ut.save_reg_user(df)
-        logger.success('First user')
-        await  message.answer("You are the best")
+    if user.empty:
+        df = ut.pydantic2pandas(usr)
+        all_df = pd.concat([users_reg_df, df])   #.reset_index(drop=True)
+        ut.save_reg_user(all_df)
+        logger.debug(f'Add new user {usr.id} ')
+        await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
+    else:
+        await message.answer(f'Скучали за тобою {usr.id}')
         return 
-    
-    try:
-        user_match = users_reg_df.loc[users_reg_df.id == usr.id]
-        user_match.set_index('id', inplace=True)
-
-
-        if len(user_match):
-            # usr_temp = user_match.loc[usr.id]
-            id_t = usr.id
-            logger.debug(f'User {id_t} is already registered ')
-            await message.answer(f'Скучали за тобою {id_t}')
-            return 
-
-        else:
-            users = [usr]
-            df = pd.DataFrame([us.to_dict() for us in users]).reset_index(drop=True)
-            df.set_index('id')
-            all_df = pd.concat([users_reg_df, df]).reset_index(drop=True)
-            logger.debug(f'Add new user {usr.id} ')
-            # users_reg_df += pd.DataFrame(usr)
-            ut.save_reg_user(all_df)
-            await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
-    except Exception as e:
-        logger.exception(f'Exception {e}')
-
 
 
 @dp.message(lambda msg: any(link in msg.text for link in ['youtu.be', 'youtube.com']))
@@ -96,51 +79,16 @@ async def cmd_numbers(message: types.Message):
     #TODO: make better not now
     logger.success(f'Хапнули лінку {link} --> {user.id}')
     user_data[message.from_user.id] = link  # Save the link to user_data
-    await message.reply(f"Яке хочете розширення? \n {link}\n повідомлення {user.username}", reply_markup=bot_func.get_keyboard(link))
+    yt_info, all_butons = bot_func.get_keyboard(link)
+    video_name = yt_info['title']
+    id_video = yt_info['id']
+    await message.reply(
+                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" + 
+                        f"Vidoe --> {video_name}\nId --> {id_video} ",
+                        reply_markup=all_butons)
     # await message.delete()
     await wait_bot_msg.delete()
 
-
-@dp.callback_query(F.data.startswith("vid"))
-async def handle_callback(callback_query: types.CallbackQuery):
-    # Extract the format ID from the callback data
-    format_id = callback_query.data.split('_')[1]
-    user = callback_query.from_user
-    youtube_url = user_data.get(user.id)  # Retrieve the saved link
-    bot_msg = callback_query.message
-
-    if not youtube_url:
-        # TODO: add logger
-        await bot_msg.reply(f"Помилка: URL не знайдено. {youtube_url}")
-        return
-
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    # TODO: loc video must to be with real name
-    loc_media = f"media/{user.id}/{current_date}"
-
-    # Options for yt-dlp without post-processing
-    ydl_opts = {
-        # 'format': f'{format_id}+bestaudio/best[ext=m4a]',  # Combine video format with best audio  #'format': 'bestvideo[ext=mp4]+bestaudio[ext=mp4]/mp4+best[height<=480]', 
-        'format': f'{format_id}+m4a/bestaudio/best',
-        'outtmpl': loc_media,
-    }
-
-    loc_media = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
-    info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video")
-
-    try:
-        #HACK: delete later
-        if loc_media.endswith('mp4'):
-            await bot_msg.answer_video(video=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\n{youtube_url}')
-        else:
-            await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title='shit music')
-        # If audio only send message.answer_musick or answer_audio check it
-        
-    except Exception as e:
-        await bot_msg.reply(f"An error occurred while sending the video: {e}")
-    
-    await bot_msg.delete()
-    await info_wait_button.delete()
 
 
 @dp.message(lambda msg: any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
@@ -164,7 +112,6 @@ async def handle_inst_tick(message: types.Message):
 
 async def main():
     root_prj = Path(__file__).parent.absolute()
-    
     # os.remove(root_prj / 'data' / 'reg_user.csv' )
     global logger
     logger = ut.setup_logger(loguru.logger)
@@ -173,11 +120,11 @@ async def main():
     global bot_func
     bot_func = Bot_Func(log=logger, root_prj=root_prj)
     logger.info('Bot Func setuped')
-    sharedContextMiddleware = SharedContextMiddleware(logger=logger, foo = 42,bar = "Bazz")
+    sharedContextMiddleware = SharedContextMiddleware(logger=logger, foo = 42,bar = "Bazz", bot_func=bot_func, user_data=user_data)
     # dp.message.middleware(sharedContextMiddleware)
     dp.update.middleware(sharedContextMiddleware)
     
-    dp.include_routers(test_bot.router)
+    dp.include_routers(test_bot.router, media_bot.router_med)
     await dp.start_polling(bot)
 
 

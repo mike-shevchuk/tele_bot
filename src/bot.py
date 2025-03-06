@@ -3,7 +3,11 @@ from src import utils as ut
 import glob
 import yt_dlp
 import os
-
+import json
+from pprint import pprint
+import aiogram
+from aiogram.filters.callback_data import CallbackData
+# import aiogram.filters.callback_data.CallbackData
 
 from aiogram import types
 
@@ -21,6 +25,14 @@ vid_format_dict = {
     '3840x2160': '4K',
     '7680x4320': '8K',
 }
+
+
+class CommonParam(CallbackData, prefix="vid"):
+    # id: str
+    title: str
+    vid_data: str
+
+
 
 
 
@@ -46,6 +58,7 @@ class Bot_Func:
             self.log.debug(f'Start download video {loc_video}') 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([med_url])
+                # self.log.trace(f'{info=}')
             await strt_dwn_msg.delete()
             # await message.edit_caption(caption="✅ Download successful!")
             self.log.success(f"✅ Download successful! {loc_video}")
@@ -94,18 +107,30 @@ class Bot_Func:
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
+                self.log.info(f'Скачується формати відео  .....')
                 info_dict = ydl.extract_info(video_url, download=False)
-                formats = info_dict.get('formats', [])
-                return formats
+                video_name = info_dict['title']
+                self.log.info(f'Скачали формати відео з назвою {video_name}')
+                # pprint(json.dumps(ydl.sanitize_info(info_dict)))
+
+                # formats = info_dict.get('formats', [])
+                # return formats
+                return info_dict
             except yt_dlp.utils.DownloadError as e:
                 self.log.debug(f"An error occurred: {e}")
+                raise e
             except Exception as e:
                 self.log.debug(f"An unexpected error occurred: {e}")
+                raise e
 
 
     #TODO: log that start collect formats
     def get_keyboard(self, link):
-        formats = self._list_formats(link)
+        yt_info = self._list_formats(link)
+        # yt_info['id']
+        # yt_info['title']
+        formats = yt_info.get('formats', [])
+
         buttons = []
         all_audio_size = [0]
         for fmt in formats:
@@ -137,4 +162,4 @@ class Bot_Func:
 
         paired_buttons = ([buttons[i:i+2] for i in range(0, len(buttons), 2)])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=paired_buttons)
-        return keyboard
+        return (yt_info, keyboard)
