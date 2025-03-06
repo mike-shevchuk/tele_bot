@@ -11,7 +11,7 @@ from aiogram.filters.callback_data import CallbackData
 
 from aiogram import types
 
-
+LIMIT_SIZE_UPL_VIDEO = 49
 
 vid_format_dict = {
     'audio only': '🎧',
@@ -132,27 +132,40 @@ class Bot_Func:
         formats = yt_info.get('formats', [])
 
         buttons = []
-
+        all_audio_size = [0]
         self.log.info(f'Create buttond for video {yt_info['title']}')
-        
         for fmt in formats:
             format_id = fmt.get('format_id')
             filesize = fmt.get('filesize')
 
-            if filesize:
-                data = {}
-                # data['id'] = yt_info['id']
-                data['title'] = yt_info['title']
-                data['vid_data'] = f"vid_{format_id}"
-                resolution = fmt.get('resolution')
-                ext = fmt['ext']
-                if ext == 'webm':
-                    continue
+            data = {}
+            # data['id'] = yt_info['id']
+            data['title'] = yt_info['title']
+            data['vid_data'] = f"vid_{format_id}"
+            
 
-                resolution = vid_format_dict.get(resolution, resolution)
-                cb1 = CommonParam(title = data['title'] , vid_data=data['vid_data'])
-                self.log.trace(f'Create buuton {cb1}')
-                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(filesize)}", callback_data=cb1.pack()))
+            resolution = fmt.get('resolution')
+            resolution = vid_format_dict.get(resolution, resolution)
+
+            IsVideo = False
+            ext = fmt['ext']
+
+
+            if ext == 'webm' or not filesize:
+                continue
+
+            if ext == 'm4a':
+                all_audio_size.append(filesize)
+
+            if ext == 'mp4':
+                IsVideo = True
+            cb1 = CommonParam(title = data['title'] , vid_data=data['vid_data'])
+            self.log.trace(f'Create buuton {cb1}')
+
+            real_size = (filesize, filesize + max(all_audio_size))[IsVideo]
+
+            if (filesize and real_size < LIMIT_SIZE_UPL_VIDEO * 1024 * 1024):
+                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(real_size)}", callback_data=cb1.pack()))
 
         if not buttons:
             buttons.append(types.InlineKeyboardButton(text="No formats with filesize available", callback_data="no_formats"))

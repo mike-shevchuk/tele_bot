@@ -12,6 +12,14 @@ from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from src.MiddleWare import SharedContextMiddleware
+from handlers import test_bot
+
+# from aiogram.filters import Text
+
+from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram.filters.command import Command
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from src.MiddleWare import SharedContextMiddleware
 from handlers import test_bot, media_bot
 
 # from aiogram.filters import Text
@@ -118,6 +126,8 @@ async def main():
     
     dp.include_routers(test_bot.router, media_bot.router_med)
     await dp.start_polling(bot)
+
+
 
 
 if __name__ == "__main__":
