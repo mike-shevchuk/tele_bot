@@ -133,9 +133,17 @@ class Bot_Func:
 
         buttons = []
         all_audio_size = [0]
+        self.log.info(f'Create buttond for video {yt_info['title']}')
         for fmt in formats:
             format_id = fmt.get('format_id')
             filesize = fmt.get('filesize')
+
+            data = {}
+            # data['id'] = yt_info['id']
+            data['title'] = yt_info['title']
+            data['vid_data'] = f"vid_{format_id}"
+            
+
             resolution = fmt.get('resolution')
             resolution = vid_format_dict.get(resolution, resolution)
 
@@ -151,11 +159,13 @@ class Bot_Func:
 
             if ext == 'mp4':
                 IsVideo = True
+            cb1 = CommonParam(title = data['title'] , vid_data=data['vid_data'])
+            self.log.trace(f'Create buuton {cb1}')
 
             real_size = (filesize, filesize + max(all_audio_size))[IsVideo]
 
             if (filesize and real_size < LIMIT_SIZE_UPL_VIDEO * 1024 * 1024):
-                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(real_size)}", callback_data=f"vid_{format_id}"))
+                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(real_size)}", callback_data=cb1.pack()))
 
         if not buttons:
             buttons.append(types.InlineKeyboardButton(text="No formats with filesize available", callback_data="no_formats"))
