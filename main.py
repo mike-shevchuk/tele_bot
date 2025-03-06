@@ -29,6 +29,8 @@ from src.bot import Bot_Func
 from src import utils as ut
 from src.bot import CommonParam
 
+import glob
+
 user_data = {}
 load_dotenv()
 
@@ -108,6 +110,11 @@ async def handle_inst_tick(message: types.Message):
         await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{message.text}')
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
+    loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
+    assert loc_match
+    loc_video  = loc_match[0]
+
+    ut.delete_video_file(loc_video)
 
 
 async def main():
@@ -126,6 +133,7 @@ async def main():
     
     dp.include_routers(test_bot.router, media_bot.router_med)
     await dp.start_polling(bot)
+
 
 
 
