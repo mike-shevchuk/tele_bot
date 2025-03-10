@@ -39,6 +39,8 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
+BOT_NAME = 'med_soc_bot'
+
 @dp.message(Command("start"))
 async def start_user(message:types.Message):
     users_reg_df: pd.DataFrame  = ut.get_reg_users()
@@ -107,7 +109,7 @@ async def handle_inst_tick(message: types.Message):
     loc_video = await bot_func.get_dwn_media(ydl_opts, message)
     # await message.edit_caption(caption=f"File size: {os.path.getsize(loc_video)} bytes")
     try:
-        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@med_link_bot\n\n{message.text}')
+        await message.answer_video(video=types.FSInputFile(loc_video), caption=f'@{BOT_NAME}\n\n{message.text}')
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
     loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
