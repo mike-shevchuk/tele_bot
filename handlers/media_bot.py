@@ -71,7 +71,12 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
     assert loc_match
     loc_video  = loc_match[0]
-
+    file_size = ut.get_file_size(loc_video)
+    df_user = ut.get_user_by_id(user.id)
+    logger.trace(f'{df_user=}')
+    user_tele = ut.pandas2pydentic(df_user)
+    user_tele.use_memory += file_size
+    ut.update_row(user_tele)
     ut.delete_video_file(loc_video)
     
 

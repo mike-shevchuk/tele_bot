@@ -140,8 +140,9 @@ class Bot_Func:
 
             data = {}
             # data['id'] = yt_info['id']
-            data['title'] = yt_info['title']
+            
             data['vid_data'] = f"vid_{format_id}"
+            data['title'] = yt_info['title'][:52]
             
 
             resolution = fmt.get('resolution')

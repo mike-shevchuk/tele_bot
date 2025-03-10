@@ -76,11 +76,15 @@ async def start_user(message:types.Message):
 
 @dp.message(lambda msg: any(link in msg.text for link in ['youtu.be', 'youtube.com']))
 async def cmd_numbers(message: types.Message):
-    #TODO: add user tele
     user = message.from_user
-    wait_bot_msg = await message.reply("Твоя лінка на youtube повідомлення опрацьовується!")
     link = ut.expand_url(message.text)
-    #TODO: make better not now
+    df_t = ut.get_user_by_id(user.id)
+
+    if df_t.empty:
+        await message.reply(f"Ти не зареганий натисни /start")
+        return
+    # if (ut.get_reg_users()):
+    wait_bot_msg = await message.reply("Твоя лінка на youtube повідомлення опрацьовується!")
     logger.success(f'Хапнули лінку {link} --> {user.id}')
     user_data[message.from_user.id] = link  # Save the link to user_data
     yt_info, all_butons = bot_func.get_keyboard(link)

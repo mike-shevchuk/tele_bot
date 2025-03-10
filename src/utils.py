@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from src.Users import UserTele
+from src.Users import UserTele, Level
 from src.Errors import CSVError
 
 
@@ -24,7 +24,8 @@ def pydantic2pandas(user):
 def pandas2pydentic(user_df):
     user_id = int(user_df.index[0])
     user_dct = user_df.to_dict(orient='records')[0]
-    user_dct['id'] = user_id
+    user_dct['id'] = user_id 
+    user_dct['level'] = Level.__members__.get(user_dct['level'].split('.')[-1])
 
     user_tele : UserTele = UserTele.model_validate(user_dct)
 
@@ -51,6 +52,14 @@ def get_user_by_id(usr_id):
         return pd.DataFrame()
 
 
+def update_row(user:UserTele):
+    all_df = get_reg_users()
+    user_row = pydantic2pandas(user)
+    logger.trace(f'{all_df=}, \n{user_row=}')
+    all_df.update(user_row)
+    save_reg_user(all_df)
+
+
 def get_reg_users():
     reg_user_path = root_prj / 'data/reg_user.csv'
     print(f'{reg_user_path.parent=}')
@@ -59,7 +68,7 @@ def get_reg_users():
     if reg_user_path.is_file():
         df = pd.read_csv(reg_user_path)
         if df.empty:     
-            logger.waring('Csv file is empty')
+            logger.warning('Csv file is empty')
             return create_empty_csv()
         
         df= df.replace({np.nan: None})

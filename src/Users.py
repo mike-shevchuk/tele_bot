@@ -12,6 +12,7 @@ class Level(Enum):
     dubil = 12.0
     test = 0.0
     
+    
 
 class UserTele(BaseModel):
     id: int
@@ -25,7 +26,7 @@ class UserTele(BaseModel):
     last_name: Union[str, None] = Field(default='uknown')
     is_premium: Union[bool, None]
     
-    level: Level = Field(default=Level.dubil.value)
+    level: Level = Field(default=Level.dubil)
     # free_memory: float = level.value
     use_memory: float = 0
 
@@ -41,7 +42,7 @@ class UserTele(BaseModel):
             first_name='uknown',
             last_name='uknown',
             is_premium = None,
-            level = Level.test.value,
+            level = Level.test,
             use_memmory = 0
         )
 
