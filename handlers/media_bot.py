@@ -1,11 +1,15 @@
 from datetime import datetime
 from aiogram import F, Bot, Dispatcher, types, Router
 from src.bot import CommonParam
-
+from src import utils as ut
+import os
+import glob
 
 
 
 router_med = Router()
+BOT_NAME = 'med_soc_bot'
+
 
 
 # @dp.callback_query(CommonParam.filter(F.vid_data == "vid_140"))
@@ -37,7 +41,8 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
-    loc_media = f"media/{user.id}/{current_date}"
+    full_name_video = current_date +'__'+ title
+    loc_media = f"media/{user.id}/{full_name_video}"
     # loc_media = f"media/{user.id}/{title_dt}" 
 
     # Options for yt-dlp without post-processing
@@ -54,14 +59,23 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     try:
         #HACK: delete later
         if loc_media.endswith('mp4'):
-            await bot_msg.answer_video(video=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\n{youtube_url}', title=title)
+            await bot_msg.answer_video(video=types.FSInputFile(loc_media), caption = f'@{BOT_NAME}\n\n{youtube_url}', title=title)
         else:
-            await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@med_link_bot\n\nmusic', title=title)
+            await bot_msg.answer_audio(audio=types.FSInputFile(loc_media), caption = f'@{BOT_NAME}', title=title)
         # If audio only send message.answer_musick or answer_audio check it
         
     except Exception as e:
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
     
+    
+    loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
+    assert loc_match
+    loc_video  = loc_match[0]
+
+    ut.delete_video_file(loc_video)
+    
+
+
     await bot_msg.delete()
     await info_wait_button.delete()
 
