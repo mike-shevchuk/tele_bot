@@ -82,14 +82,14 @@ class Bot_Func:
             return 
 
         
-        self.log.info(f"File size: {ut.human_readable(os.path.getsize(loc_video))}")
+        self.log.info(f"File size: {ut.h_readable(os.path.getsize(loc_video))}")
 
         
 
         #TODO: show awailable limit for user
         # await message.answer(f'Твоє відео {tiktok_url}')
 
-        return loc_video
+        return (loc_video, os.path.getsize(loc_video))
     
 
 
@@ -102,7 +102,8 @@ class Bot_Func:
         max_format=1080
         ydl_opts = {
             'quiet': True,
-            'format': f'bestvideo[height<={max_format}][height>={min_format}]+bestaudio/best[height<={max_format}][height>={min_format}]',
+            'format':   f'bestvideo[height<={max_format}][height>={min_format}]' + 
+                        f'+bestaudio/best[height<={max_format}][height>={min_format}]',
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -142,7 +143,8 @@ class Bot_Func:
             # data['id'] = yt_info['id']
             
             data['vid_data'] = f"vid_{format_id}"
-            data['title'] = yt_info['title'][:52]
+            data['title'] = yt_info['title'][:52].replace(':', '_')
+            
             
 
             resolution = fmt.get('resolution')
@@ -166,7 +168,9 @@ class Bot_Func:
             real_size = (filesize, filesize + max(all_audio_size))[IsVideo]
 
             if (filesize and real_size < LIMIT_SIZE_UPL_VIDEO * 1024 * 1024):
-                buttons.append(types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.human_readable(real_size)}", callback_data=cb1.pack()))
+                buttons.append(
+                    types.InlineKeyboardButton(text=f"{resolution} {ext} {ut.h_readable(real_size)}",
+                                                           callback_data=cb1.pack()))
 
         if not buttons:
             buttons.append(types.InlineKeyboardButton(text="No formats with filesize available", callback_data="no_formats"))

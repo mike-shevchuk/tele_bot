@@ -5,13 +5,12 @@ from enum import Enum
 
 class Level(Enum):
     admin = None
-    vip = 400.0
-    premium = 300.0
-    chel = 150.0
-    debtors = 75.0
-    dubil = 12.0
+    vip = 400.0*1024*1024 
+    premium = 300.0*1024*1024 
+    chel = 150.0*1024*1024 
+    debtors = 75.0*1024*1024 
+    dubil = 4.0*1024*1024 
     test = 0.0
-    
     
 
 class UserTele(BaseModel):
