@@ -154,6 +154,7 @@ async def handle_inst_tick(message: types.Message):
 
 
 async def main():
+    CNF = ut.load_config('configs/cfg.yml')
     root_prj = Path(__file__).parent.absolute()
     # os.remove(root_prj / 'data' / 'reg_user.csv' )
     global logger

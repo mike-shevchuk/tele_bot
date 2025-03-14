@@ -4,11 +4,9 @@ import requests
 import os
 import loguru
 import time
-
-import numpy as np
-import yt_dlp
 import yaml
 from easydict import EasyDict as edict
+import numpy as np
 
 from src.Users import UserTele, Level
 from src.Errors import CSVError
@@ -17,7 +15,63 @@ from src.Errors import CSVError
 root_prj = Path(__file__).parent.parent.absolute()
 
 
+def crt_cfg_params(cfg_params):
+    cfg = load_config('configs/cfg.yml')
+    cfg_params_copy = edict(cfg_params.copy())
+    res = edict()
+    for key, value in cfg_params_copy.items():
+        keys = key.split('.')
+        nested_dict = reduce(lambda d, key: d.get(key) if d else None, keys[:-1], cfg)
+        if nested_dict:
+            cfg_value = nested_dict.get(keys[-1])
+            if value is None:
+                value = cfg_value
+        curr_dict = res
+        for i, k in enumerate(keys):
+            if k not in curr_dict:
+                curr_dict[k] = {} if i < len(keys) - 1 else value
+            curr_dict = curr_dict[k]
+    return res
 
+
+def load_config(config_path='configs/cfg.yml'):
+    """
+    Load configuration from a YAML file.
+
+    Args:
+        config_path (str): Path to the YAML configuration file.
+
+    Returns:
+        dict: Configuration data from the YAML file.
+    """
+    with open(config_path) as file:
+        config = yaml.safe_load(file)
+    config = edict(config)
+
+    shared_vars = config.shared_vars
+    # TODO: change this hack
+    # prj_root = str(Path(file).parent.parent)
+    # shared_vars.update({'prj_root': os.path.normpath(prj_root)})
+    parse_config(config, shared_vars=shared_vars)
+    
+    return config
+
+
+def parse_config(cfg, shared_vars):
+    # TODO: check is str a path is path normalizete it
+    for key, value in cfg.items():
+        if isinstance(value, dict):
+            parse_config(value, shared_vars)
+        elif isinstance(value, str):
+            new_value = value
+            for var, val in shared_vars.items():
+                if f"{{{var}}}" in value:
+                    new_value = new_value.replace(f"{{{var}}}", str(val))
+            # if new value is numeric
+            if new_value.isnumeric():
+                new_value = int(new_value)
+                
+            cfg[key] = new_value
 
  
 
@@ -91,13 +145,6 @@ def get_reg_users():
     # STEP3: if exist, read csv dile and return DataFrame
     ...
 
-def is_supported(url):
-    ies = yt_dlp.extraactor.list_extractors()
-    extractor = next((ie.ie_key() for ie in ies if ie.suitable(url) and ie.ie_key() != 'Generic'), None)
-
-    message = f'handled by the {extractor} extractor' if extractor else 'not handled by any dedicated extractor'
-    print(f'{url} is {message}')
-    
 
 def save_reg_user(df):
     reg_user_path = root_prj / 'data/reg_user.csv'
