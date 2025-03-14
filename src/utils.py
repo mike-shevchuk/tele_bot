@@ -6,6 +6,9 @@ import loguru
 import time
 
 import numpy as np
+import yt_dlp
+import yaml
+from easydict import EasyDict as edict
 
 from src.Users import UserTele
 from src.Errors import CSVError
@@ -59,7 +62,7 @@ def get_reg_users():
     if reg_user_path.is_file():
         df = pd.read_csv(reg_user_path)
         if df.empty:     
-            logger.waring('Csv file is empty')
+            logger.warning('Csv file is empty')
             return create_empty_csv()
         
         df= df.replace({np.nan: None})
@@ -75,6 +78,13 @@ def get_reg_users():
     # STEP3: if exist, read csv dile and return DataFrame
     ...
 
+def is_supported(url):
+    ies = yt_dlp.extraactor.list_extractors()
+    extractor = next((ie.ie_key() for ie in ies if ie.suitable(url) and ie.ie_key() != 'Generic'), None)
+
+    message = f'handled by the {extractor} extractor' if extractor else 'not handled by any dedicated extractor'
+    print(f'{url} is {message}')
+    
 
 def save_reg_user(df):
     reg_user_path = root_prj / 'data/reg_user.csv'

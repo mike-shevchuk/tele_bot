@@ -1,10 +1,13 @@
 from datetime import datetime
 from aiogram import F, Bot, Dispatcher, types, Router
-from src.bot import CommonParam
+from src.bot import CommonParamYouTube
+
 from src import utils as ut
 import os
 import glob
 
+
+from handlers.test_bot import CommonParamTick
 
 
 router_med = Router()
@@ -12,21 +15,13 @@ BOT_NAME = 'med_soc_bot'
 
 
 
-# @dp.callback_query(CommonParam.filter(F.vid_data == "vid_140"))
-# @dp.callback_query(CommonParam.filter(F.vid_data.startwith("vid")))
+# @dp.callback_query(CommonParamYouTube.filter(F.vid_data == "vid_140"))
+# @dp.callback_query(CommonParamYouTube.filter(F.vid_data.startwith("vid")))
 @router_med.callback_query(F.data.startswith("vid"))
 async def handle_callback(callback_query: types.CallbackQuery, logger, user_data, bot_func):
-    # Extract the format ID from the callback data
-    # dt = callback_query.data['vid_data']
-    # vid_dt = dt['vid_data']
-    # cb1.unpack('my:demo:42')
-    cb1 = CommonParam.unpack(callback_query.data)
+    cb1 = CommonParamYouTube.unpack(callback_query.data)
     title = cb1.title
-    # id = cb1.id
     vid_dt = cb1.vid_data
-    # vid_dt = callback_query.data
-    # id_dt = dt['id']
-    # title_dt = dt['title']
     logger.trace(f'{cb1=}')
     format_id = vid_dt.split('_')[1]
     
@@ -42,8 +37,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
     full_name_video = current_date +'__'+ title
-    loc_media = f"media/{user.id}/{full_name_video}"
-    # loc_media = f"media/{user.id}/{title_dt}" 
+    loc_media = f"media/{user.id}/{full_name_video}" 
 
     # Options for yt-dlp without post-processing
     ydl_opts = {
@@ -79,3 +73,14 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     await bot_msg.delete()
     await info_wait_button.delete()
 
+
+
+
+@router_med.callback_query(F.data.startswith("tick"))
+async def handle_callback_reel(callback_query: types.CallbackQuery, logger, user_data, bot_func):
+    cb1 = CommonParamTick.unpack(callback_query.data)
+    title = cb1.title
+    vid_data = cb1.vid_data
+    # logger.trace(f'{cb1=}')
+
+    logger.info(f'callback catch {cb1}')

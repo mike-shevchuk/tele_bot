@@ -27,7 +27,7 @@ vid_format_dict = {
 }
 
 
-class CommonParam(CallbackData, prefix="vid"):
+class CommonParamYouTube(CallbackData, prefix="vid"):
     # id: str
     title: str
     vid_data: str
@@ -159,7 +159,7 @@ class Bot_Func:
 
             if ext == 'mp4':
                 IsVideo = True
-            cb1 = CommonParam(title = data['title'] , vid_data=data['vid_data'])
+            cb1 = CommonParamYouTube(title = data['title'] , vid_data=data['vid_data'])
             self.log.trace(f'Create buuton {cb1}')
 
             real_size = (filesize, filesize + max(all_audio_size))[IsVideo]
