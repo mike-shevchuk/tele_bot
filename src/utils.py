@@ -10,12 +10,16 @@ import yt_dlp
 import yaml
 from easydict import EasyDict as edict
 
-from src.Users import UserTele
+from src.Users import UserTele, Level
 from src.Errors import CSVError
 
 
 root_prj = Path(__file__).parent.parent.absolute()
 
+
+
+
+ 
 
 def pydantic2pandas(user):
     user_df = pd.DataFrame([user.to_dict()])
@@ -27,7 +31,8 @@ def pydantic2pandas(user):
 def pandas2pydentic(user_df):
     user_id = int(user_df.index[0])
     user_dct = user_df.to_dict(orient='records')[0]
-    user_dct['id'] = user_id
+    user_dct['id'] = user_id 
+    user_dct['level'] = Level.__members__.get((user_dct['level']).split('.')[-1])
 
     user_tele : UserTele = UserTele.model_validate(user_dct)
 
@@ -52,6 +57,14 @@ def get_user_by_id(usr_id):
     else:
         logger.debug(f'User {usr_id} not in db')
         return pd.DataFrame()
+
+
+def update_row(user:UserTele):
+    all_df = get_reg_users()
+    user_row = pydantic2pandas(user)
+    logger.trace(f'{all_df=}, \n{user_row=}')
+    all_df.update(user_row)
+    save_reg_user(all_df)
 
 
 def get_reg_users():
@@ -100,7 +113,12 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
     logfile_name = f"{dir_logs}/{logfile_name}_{timestr}.log"
     fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | <level>{level}</level> | <level>{message}</level>"
     LOGGER.remove(0)
-    LOGGER.add(logfile_name, level="DEBUG", format=fmt, colorize=False, backtrace=False, diagnose=True)
+    LOGGER.add(logfile_name,
+                level="DEBUG",
+                format=fmt,
+                colorize=False,
+                backtrace=False,
+                diagnose=True)
     LOGGER.add(os.sys.stdout, level="TRACE", format=fmt, colorize=True, backtrace=True, diagnose=True)
 
     global logger
@@ -118,14 +136,14 @@ def expand_url(url):
         return url
 
 
-def human_readable(file_size, unit='B'):
+def h_readable(file_size, unit='B'):
     if file_size > 1024 * 1024:
         file_size /=  1024 * 1024
         unit = 'MB'
     elif file_size > 1024:
         file_size /= 1024
         unit = 'KB'
-    return f"{file_size:.2f} {unit}"
+    return f"{file_size:.2f} {unit}" if file_size > 0 else f'0 {unit} or less'
 
 
 
