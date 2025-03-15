@@ -39,7 +39,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
-BOT_NAME = 'med_soc_bot'
+# BOT_NAME = 'med_soc_bot'
 
 @dp.message(Command("start"))
 async def start_user(message:types.Message):
@@ -110,7 +110,7 @@ async def cmd_numbers(message: types.Message):
 
 
 @dp.message(lambda msg: any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
-async def handle_inst_tick(message: types.Message):
+async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
@@ -140,7 +140,7 @@ async def handle_inst_tick(message: types.Message):
     
     try:
         await message.answer_video(video=types.FSInputFile(loc_video), 
-                                   caption=f'@{BOT_NAME}\n\nУ тебе лишилося {
+                                   caption=f'@{cfg.shared_vars.bot_name}\n\nУ тебе лишилося {
                                        ut.h_readable(availMemory)
                                        }\n\n{message.text}')
     except Exception as e:
@@ -156,6 +156,7 @@ async def handle_inst_tick(message: types.Message):
 async def main():
     root_prj = Path(__file__).parent.absolute()
     # os.remove(root_prj / 'data' / 'reg_user.csv' )
+    cfg = ut.load_config('configs/cfg.yml')
     global logger
     logger = ut.setup_logger(loguru.logger)
     logger.info('Logger setuped')
@@ -164,7 +165,7 @@ async def main():
     bot_func = Bot_Func(log=logger, root_prj=root_prj)
     logger.info('Bot Func setuped')
     sharedContextMiddleware = SharedContextMiddleware(
-        logger=logger, foo = 42,bar = "Bazz", bot_func=bot_func, user_data=user_data
+        logger=logger, foo = 42,bar = "Bazz", bot_func=bot_func, user_data=user_data, cfg=cfg
     )
     # dp.message.middleware(sharedContextMiddleware)
     dp.update.middleware(sharedContextMiddleware)

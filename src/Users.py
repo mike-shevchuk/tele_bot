@@ -4,7 +4,7 @@ from enum import Enum
 
 
 class Level(Enum):
-    admin = None
+    admin = 5000.0*1024*1024
     vip = 400.0*1024*1024 
     premium = 300.0*1024*1024 
     chel = 150.0*1024*1024 
@@ -25,7 +25,7 @@ class UserTele(BaseModel):
     last_name: Union[str, None] = Field(default='uknown')
     is_premium: Union[bool, None]
     
-    level: Level = Field(default=Level.dubil)
+    level: Level = Field(default=Level.chel)
     # free_memory: float = level.value
     use_memory: float = 0
 

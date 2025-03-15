@@ -1,0 +1,14 @@
+logger:
+    file_format: "{time:YYYY-MM-DD_T_HH:mm:ss.SSS} | {name} | {level} | {message}"
+    project_name: "LWI"
+    log_dir: "logs"
+    file_log_level: "DEBUG"
+    console_log_level: "TRACE"
+
+shared_vars:
+    prj_root: ''
+    bot_name: 'socDrift'
+    # db_col_name: 'mikes_test'
+    db_col_name: 'chat-bot'
+    workers_n: 1
+    model: 'paraphrase-multilingual-mpnet-base-v2'

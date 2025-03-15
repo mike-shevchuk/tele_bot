@@ -11,14 +11,14 @@ from handlers.test_bot import CommonParamTick
 
 
 router_med = Router()
-BOT_NAME = 'med_soc_bot'
+# BOT_NAME = 'med_soc_bot'
 
 
 
 # @dp.callback_query(CommonParamYouTube.filter(F.vid_data == "vid_140"))
 # @dp.callback_query(CommonParamYouTube.filter(F.vid_data.startwith("vid")))
 @router_med.callback_query(F.data.startswith("vid"))
-async def handle_callback(callback_query: types.CallbackQuery, logger, user_data, bot_func):
+async def handle_callback(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg):
     cb1 = CommonParamYouTube.unpack(callback_query.data)
     title = cb1.title
     vid_dt = cb1.vid_data
@@ -61,7 +61,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         #HACK: delete later
         if loc_media.endswith('mp4'):
             await bot_msg.answer_video(video=types.FSInputFile(loc_media), 
-                                       caption = f'@{BOT_NAME}\n\n' + 
+                                       caption = f'@{cfg.shared_vars.bot_name}\n\n' + 
                                                  f'У тебе лишилося {
                                                      ut.h_readable(
                                                          available_memory-file_size
@@ -71,7 +71,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
                                         title=title)
         else:
             await bot_msg.answer_audio(audio=types.FSInputFile(loc_media),
-                                    caption = f'@{BOT_NAME}',
+                                    caption = f'@{cfg.shared_vars.bot_name}',
                                     title=title)
         # If audio only send message.answer_musick or answer_audio check it
         # ut.recalc_used_mem(loc_video, user)
