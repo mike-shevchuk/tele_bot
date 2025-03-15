@@ -159,6 +159,7 @@ class Bot_Func:
 
             if ext == 'm4a':
                 all_audio_size.append(filesize)
+                ext = ''
 
             if ext == 'mp4':
                 IsVideo = True

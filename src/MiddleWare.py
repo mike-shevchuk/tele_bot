@@ -3,14 +3,16 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.types import TelegramObject, Message
 from typing import Callable, Dict, Any, Awaitable
 
+
 class SharedContextMiddleware(BaseMiddleware):
-    def __init__(self, logger, foo: int, bar: str, bot_func, user_data):
+    def __init__(self, logger, foo: int, bar: str, bot_func, user_data, cfg):
         super().__init__()
         self.logger = logger
         self.bot_func = bot_func
         self.user_data = user_data
         self.foo = foo
         self.bar = bar
+        self.cfg = cfg
 
     async def __call__(self, handler, event: TelegramObject, data: Dict[str, Any]) -> Any:
         # Add shared context to data
@@ -19,6 +21,7 @@ class SharedContextMiddleware(BaseMiddleware):
         data['foo'] = self.foo
         data['bar'] = self.bar
         data['user_data'] = self.user_data
+        data['cfg'] = self.cfg
 
         # Log the event
         # self.logger.info(f"Handling event: {event}")
