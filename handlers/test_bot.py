@@ -10,7 +10,7 @@ from aiogram.utils.markdown import hide_link
 
 from src.bot import CommonParamYouTube
 from src.MiddleWare import SharedContextMiddleware
-
+from src import utils as ut
 
 class CommonParamTick(CallbackData, prefix="tick"):
     # id: str
@@ -99,3 +99,27 @@ async def cmd_test2(message: types.Message, logger):
         f"your user_id {user.id}"
     )
 
+@router.message(Command("bugaga"))
+async def cmd_mem_0(message: types.Message, logger):
+    user = message.from_user
+    
+
+    try:
+        user_df = ut.get_user_by_id(user.id)
+        user = ut.pandas2pydentic(user_df)
+        user.use_memory = 0
+        ut.update_row(user)
+        logger.info(f'set memory on 0 for {user.id}')
+        await message.answer(
+            f"скинули твою використану пам'ять 0"
+        )
+    except IndexError:
+        logger.info(f'{user.id} dont reg')
+        await message.answer(
+        f"Ти не зареганий натисни /start"
+        )
+    except Exception as e:
+        logger.exception(f'{user.id} dont reg')
+        await message.answer(
+        f"помилка {e}"
+        )

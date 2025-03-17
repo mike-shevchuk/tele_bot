@@ -15,6 +15,7 @@ from src.Errors import CSVError
 root_prj = Path(__file__).parent.parent.absolute()
 
 
+
 def crt_cfg_params(cfg_params):
     cfg = load_config('configs/cfg.yml')
     cfg_params_copy = edict(cfg_params.copy())

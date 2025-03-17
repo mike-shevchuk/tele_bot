@@ -54,9 +54,9 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
 
     loc_media, file_size = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
     info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video")
-    loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
-    assert loc_match
-    loc_video  = loc_match[0]
+    # loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
+    # assert loc_match
+    # loc_video  = loc_match[0]
     try:
         #HACK: delete later
         if loc_media.endswith('mp4'):
@@ -81,7 +81,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
     
     
-    ut.delete_video_file(loc_video)
+    ut.delete_video_file(loc_media)
     
 
 
