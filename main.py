@@ -6,6 +6,7 @@ import asyncio
 from dotenv import load_dotenv
 import pandas as pd
 import loguru
+from pprint import pprint
 
 
 from aiogram import F, Bot, Dispatcher, types, Router
