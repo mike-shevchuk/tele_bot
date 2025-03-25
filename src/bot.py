@@ -144,7 +144,9 @@ class Bot_Func:
             
             data['vid_data'] = f"vid_{format_id}"
             data['title'] = yt_info['title'][:52].replace(':', '_')
-            
+            if not ut.is_ltn(data['title']):
+                data['title'] = ut.cr_2_ln(data['title'])
+
             
 
             resolution = fmt.get('resolution')

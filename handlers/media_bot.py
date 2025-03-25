@@ -21,6 +21,9 @@ router_med = Router()
 async def handle_callback(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg):
     cb1 = CommonParamYouTube.unpack(callback_query.data)
     title = cb1.title
+    # TODO: make norm translate for cyrilic
+    if ut.is_ltn(title):
+        ...
     vid_dt = cb1.vid_data
     logger.trace(f'{cb1=}')
     format_id = vid_dt.split('_')[1]

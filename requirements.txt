@@ -18,3 +18,4 @@ tomli==2.0.1
 tqdm==4.67.1
 yt-dlp==2025.1.26
 easydict==1.13
+srtools==0.1.13

@@ -6,6 +6,7 @@ import loguru
 import time
 import yaml
 from easydict import EasyDict as edict
+from srtools import cyrillic_to_latin, latin_to_cyrillic
 import numpy as np
 
 from src.Users import UserTele, Level
@@ -221,3 +222,13 @@ def get_file_size(file_path):
     except Exception as e:
         logger.error(f"An error occurred while trying to get the size of the file {file_path}: {e}")
         return None
+
+
+def cr_2_ln(sent:str) -> str:
+    return cyrillic_to_latin(sent)
+
+def ln_2_cr(sent: str) -> str:
+    return latin_to_cyrillic(sent)
+
+def is_ltn(sent:str) -> bool:
+    return sent == sent.encode('utf-8')
