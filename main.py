@@ -8,6 +8,7 @@ import pandas as pd
 import loguru
 from pprint import pprint
 
+import jinja2
 
 from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
@@ -114,6 +115,10 @@ async def cmd_numbers(message: types.Message):
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
+    environment = jinja2.Environment()
+    answer_template = environment.from_string(
+        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}}\n\n{{url}}}"
+    )
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
@@ -139,11 +144,15 @@ async def handle_inst_tick(message: types.Message, cfg):
     loc_video, file_size = await bot_func.get_dwn_media(ydl_opts, message)
     availMemory -= file_size
     
+    answer_cap = answer_template.render(
+        bot_name = cfg.shared_vars.bot_name, 
+        avail_mem = ut.h_readable(availMemory),
+        url = message.text
+    )
+    
     try:
         await message.answer_video(video=types.FSInputFile(loc_video), 
-                                   caption=f'@{cfg.shared_vars.bot_name}\n\nУ тебе лишилося {
-                                       ut.h_readable(availMemory)
-                                       }\n\n{message.text}')
+                                   caption=answer_cap)
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
     user.use_memory += file_size

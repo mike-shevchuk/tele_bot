@@ -1,7 +1,7 @@
 from datetime import datetime
 from aiogram import F, Bot, Dispatcher, types, Router
 from src.bot import CommonParamYouTube
-
+import jinja2
 from src import utils as ut
 import os
 import glob
@@ -21,6 +21,10 @@ router_med = Router()
 async def handle_callback(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg):
     cb1 = CommonParamYouTube.unpack(callback_query.data)
     title = cb1.title
+    environment = jinja2.Environment()
+    answer_template = environment.from_string(
+        "@{{bot_name}}\n\n{{name}}\n\nУ тебе лишилося {{avail_mem}}}\n\n{{youtube_url}}"
+    )
     # TODO: make norm translate for cyrilic
     if ut.is_ltn(title):
         ...
@@ -60,17 +64,17 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     # loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
     # assert loc_match
     # loc_video  = loc_match[0]
+    answer_cap = answer_template.render(
+        bot_name = cfg.shared_vars.bot_name, 
+        avail_mem = ut.h_readable(available_memory-file_size),
+        youtube_url = youtube_url,
+        name = title)
     try:
         #HACK: delete later
         if loc_media.endswith('mp4'):
-            await bot_msg.answer_video(video=types.FSInputFile(loc_media), 
-                                       caption = f'@{cfg.shared_vars.bot_name}\n\n' + 
-                                                 f'У тебе лишилося {
-                                                     ut.h_readable(
-                                                         available_memory-file_size
-                                                         )
-                                                     }' +
-                                                 f'\n\n{youtube_url}', 
+            await bot_msg.answer_video(
+                                        video=types.FSInputFile(loc_media), 
+                                        caption=answer_cap,
                                         title=title)
         else:
             await bot_msg.answer_audio(audio=types.FSInputFile(loc_media),
