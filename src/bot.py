@@ -67,7 +67,7 @@ class Bot_Func:
             await user_msg.reply(f"Download error: {e}")
             return
         except Exception as e:
-            self.log.exception(f"❌ An error occurred: {e}")
+            self.log.error(f"❌ An error occurred: {e}")
             await user_msg.reply(f"An error occurred: {e}")
             return
 
@@ -118,7 +118,7 @@ class Bot_Func:
                 # return formats
                 return info_dict
             except yt_dlp.utils.DownloadError as e:
-                self.log.debug(f"An error occurred: {e}")
+                self.log.error(f"An error occurred: {e}")
                 raise e
             except Exception as e:
                 self.log.debug(f"An unexpected error occurred: {e}")
@@ -127,7 +127,12 @@ class Bot_Func:
 
     #TODO: log that start collect formats
     def get_keyboard(self, link):
-        yt_info = self._list_formats(link)
+        try:
+            yt_info = self._list_formats(link)
+        except Exception as e:
+            self.log.error('Failed to download youtube format')
+            return
+
         # yt_info['id']
         # yt_info['title']
         formats = yt_info.get('formats', [])

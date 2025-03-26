@@ -59,7 +59,12 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         # 'outtmpl': '%(title)s.%(ext)s'
     }
 
-    loc_media, file_size = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
+    res = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
+    if not res:
+        await bot_msg.answer('Filed download media please check your link')
+        logger.warning(f'Failed to download media with link {youtube_url}\n\n\n')
+        return
+    loc_media, file_size = res
     info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video")
     # loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
     # assert loc_match

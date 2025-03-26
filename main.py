@@ -98,7 +98,14 @@ async def cmd_numbers(message: types.Message):
                                         У тебе лишилося {ut.h_readable(available_memory)}")
     logger.success(f'Хапнули лінку {link} --> {user.id}')
     user_data[message.from_user.id] = link  # Save the link to user_data
-    yt_info, all_butons = bot_func.get_keyboard(link)
+    res = bot_func.get_keyboard(link)
+    if not res:
+        await message.answer('Filed download media formats, please check your link')
+        logger.warning(f'Failed to download media formats with link {message.text}\n\n\n')
+        return
+
+        
+    yt_info, all_butons = res
     video_name = yt_info['title']
     id_video = yt_info['id']
     await message.reply(
@@ -141,7 +148,14 @@ async def handle_inst_tick(message: types.Message, cfg):
         'outtmpl': loc_video,
     }
 
-    loc_video, file_size = await bot_func.get_dwn_media(ydl_opts, message)
+    res = await bot_func.get_dwn_media(ydl_opts, message)
+    if not res:
+        await message.answer('Filed download media please check your link')
+        logger.warning(f'Failed to download media with link {message.text}\n\n\n')
+        return
+    loc_video, file_size = res
+
+
     availMemory -= file_size
     
     answer_cap = answer_template.render(
