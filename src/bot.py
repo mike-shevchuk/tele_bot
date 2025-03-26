@@ -67,7 +67,7 @@ class Bot_Func:
             await user_msg.reply(f"Download error: {e}")
             return
         except Exception as e:
-            self.log.exception(f"❌ An error occurred: {e}")
+            self.log.error(f"❌ An error occurred: {e}")
             await user_msg.reply(f"An error occurred: {e}")
             return
 
@@ -118,7 +118,7 @@ class Bot_Func:
                 # return formats
                 return info_dict
             except yt_dlp.utils.DownloadError as e:
-                self.log.debug(f"An error occurred: {e}")
+                self.log.error(f"An error occurred: {e}")
                 raise e
             except Exception as e:
                 self.log.debug(f"An unexpected error occurred: {e}")
@@ -127,7 +127,12 @@ class Bot_Func:
 
     #TODO: log that start collect formats
     def get_keyboard(self, link):
-        yt_info = self._list_formats(link)
+        try:
+            yt_info = self._list_formats(link)
+        except Exception as e:
+            self.log.error('Failed to download youtube format')
+            return
+
         # yt_info['id']
         # yt_info['title']
         formats = yt_info.get('formats', [])
@@ -143,9 +148,16 @@ class Bot_Func:
             # data['id'] = yt_info['id']
             
             data['vid_data'] = f"vid_{format_id}"
-            data['title'] = yt_info['title'][:52].replace(':', '_')
+
+            data['title'] = yt_info['title'].replace(':', '_')
+
             if not ut.is_ltn(data['title']):
                 data['title'] = ut.cr_2_ln(data['title'])
+            
+            data['title'] = ut.remove_non_ascii(data['title'])
+
+            len_txt = 64 - 2 - len('vid') - len(data['vid_data'])
+            data['title'] = data['title'][:len_txt]
 
             
 
