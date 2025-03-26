@@ -148,9 +148,16 @@ class Bot_Func:
             # data['id'] = yt_info['id']
             
             data['vid_data'] = f"vid_{format_id}"
-            data['title'] = yt_info['title'][:52].replace(':', '_')
+
+            data['title'] = yt_info['title'].replace(':', '_')
+
             if not ut.is_ltn(data['title']):
                 data['title'] = ut.cr_2_ln(data['title'])
+            
+            data['title'] = ut.remove_non_ascii(data['title'])
+
+            len_txt = 64 - 2 - len('vid') - len(data['vid_data'])
+            data['title'] = data['title'][:len_txt]
 
             
 

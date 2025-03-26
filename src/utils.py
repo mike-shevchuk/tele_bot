@@ -8,7 +8,7 @@ import yaml
 from easydict import EasyDict as edict
 from srtools import cyrillic_to_latin, latin_to_cyrillic
 import numpy as np
-
+import re
 from src.Users import UserTele, Level
 from src.Errors import CSVError
 
@@ -103,6 +103,8 @@ def create_empty_csv():
     save_reg_user(user_df)
     return user_df
 
+def remove_non_ascii(text):
+    return re.sub(r'[^\x00-\x7F]+', '', text)
 
 def get_user_by_id(usr_id):
     users_reg_df: pd.DataFrame  = get_reg_users()
