@@ -23,7 +23,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     title = cb1.title
     environment = jinja2.Environment()
     answer_template = environment.from_string(
-        "@{{bot_name}}\n\n{{name}}\n\nУ тебе лишилося {{avail_mem}}}\n\n{{youtube_url}}"
+        "@{{bot_name}}\n\n{{name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{youtube_url}}"
     )
     # TODO: make norm translate for cyrilic
     if ut.is_ltn(title):

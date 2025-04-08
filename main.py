@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 import pandas as pd
 import loguru
 from pprint import pprint
-
+from src.Users import UserTele
+from src.bot import Bot_Func
+from src import utils as ut
 import jinja2
 
 from aiogram import F, Bot, Dispatcher, types, Router
@@ -124,7 +126,7 @@ async def handle_inst_tick(message: types.Message, cfg):
     df_t = ut.get_user_by_id(user_bot.id)
     environment = jinja2.Environment()
     answer_template = environment.from_string(
-        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}}\n\n{{url}}}"
+        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{url}}"
     )
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
