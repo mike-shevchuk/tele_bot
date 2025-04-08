@@ -104,7 +104,7 @@ async def cmd_test2(message: types.Message, logger):
 async def cmd_mem_0(message: types.Message, logger):
     user = message.from_user
     
-    id = message.text.split(' ')[1]
+    id = int(message.text.split(' ')[1])
     try:
         user_df = ut.get_user_by_id(id)
         user = ut.pandas2pydentic(user_df)
@@ -112,7 +112,7 @@ async def cmd_mem_0(message: types.Message, logger):
         ut.update_row(user)
         logger.info(f'set memory on 0 for {id}')
         await message.answer(
-            f"скинули твою використану пам'ять 0"
+            f"скинули {id} використану пам'ять 0"
         )
     except IndexError:
         logger.info(f'{id} dont reg')
