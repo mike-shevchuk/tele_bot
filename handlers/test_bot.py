@@ -138,7 +138,7 @@ async def cmd_users(message: types.Message, logger):
 
     try:
         df_user = pd.read_csv(csv_path)
-        df_user = df_user.iloc[:, [0,3,4,5,8,9]]
+        df_user = df_user.iloc[:, [0,3,4,9]]
         if df_user.empty:
             await message.reply("🗃️ Таблиця користувачів порожня.")
             return
