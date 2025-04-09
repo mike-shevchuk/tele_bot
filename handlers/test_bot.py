@@ -3,15 +3,16 @@ from aiogram.enums import ParseMode
 from aiogram.types import Message
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 from uuid import uuid4
-
+import os
+import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
-
+from aiogram.fsm.storage.memory import MemoryStorage
 from src.bot import CommonParamYouTube
 from src.MiddleWare import SharedContextMiddleware
 from src import utils as ut
-
+import pandas as pd
 class CommonParamTick(CallbackData, prefix="tick"):
     # id: str
     title: str
@@ -103,23 +104,50 @@ async def cmd_test2(message: types.Message, logger):
 async def cmd_mem_0(message: types.Message, logger):
     user = message.from_user
     
-
+    id = int(message.text.split(' ')[1])
     try:
-        user_df = ut.get_user_by_id(user.id)
+        user_df = ut.get_user_by_id(id)
         user = ut.pandas2pydentic(user_df)
         user.use_memory = 0
         ut.update_row(user)
-        logger.info(f'set memory on 0 for {user.id}')
+        logger.info(f'set memory on 0 for {id}')
         await message.answer(
-            f"скинули твою використану пам'ять 0"
+            f"скинули {id} використану пам'ять 0"
         )
     except IndexError:
-        logger.info(f'{user.id} dont reg')
+        logger.info(f'{id} dont reg')
         await message.answer(
         f"Ти не зареганий натисни /start"
         )
     except Exception as e:
-        logger.exception(f'{user.id} dont reg')
+        logger.exception(f'{id} dont reg')
         await message.answer(
         f"помилка {e}"
         )
+
+@router.message(Command("users"))
+async def cmd_users(message: types.Message, logger):
+    user = message.from_user
+    logger.trace(f'{user.id} run users')
+
+    csv_path = '/home/sheva/projects/shev_prj/tele_bot/data/reg_user.csv'
+
+    if not os.path.isfile(csv_path):
+        await message.reply("⚠️ Файл з користувачами не знайдено.")
+        return
+
+    try:
+        df_user = pd.read_csv(csv_path)
+        df_user = df_user.iloc[:, [0,3,4,9]]
+        if df_user.empty:
+            await message.reply("🗃️ Таблиця користувачів порожня.")
+            return
+
+        # Преобразуємо таблицю в текст, екрануємо HTML
+        text_table = html.escape(df_user.to_string(index=False))
+
+        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Помилка при зчитуванні користувачів: {e}")
+        await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
