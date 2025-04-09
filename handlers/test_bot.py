@@ -149,14 +149,15 @@ async def cmd_users(message: types.Message, logger, cfg):
         # change value in column use_memmory to percent 0 to 100 using column level . Level it iis max 100 %  
         get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
         df_display['level'] = df_display['level'].map(get_bytes4level)
-        df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 2).astype(str) + '%'
-        df_display = df_display.loc[:, ['ID', 'nick', 'name', 'size%']]
+        df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 1).astype(str) + '%'
+        df_display['nick/name'] = df_display['nick'] + '/' + df_display['name']
+        df_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
         logger.trace(df_display)
 
 
         # df_display['use_mem'] = df_display['use_mem'] / df_display['level'] * 100
         # Преобразуємо таблицю в текст, екрануємо HTML
-        text_table = html.escape(df_display.to_string(index=False, justify='left'))
+        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
 
         await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
 
