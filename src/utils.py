@@ -51,10 +51,15 @@ def load_config(config_path='configs/cfg.yml'):
     config = edict(config)
 
     shared_vars = config.shared_vars
+    shared_vars.update({'prj_root': os.getcwd()})
+    parse_config(config, shared_vars=shared_vars)
+ 
+
+    # shared_vars = config.shared_vars
     # TODO: change this hack
     # prj_root = str(Path(file).parent.parent)
     # shared_vars.update({'prj_root': os.path.normpath(prj_root)})
-    parse_config(config, shared_vars=shared_vars)
+    # parse_config(config, shared_vars=shared_vars)
     
     return config
 
@@ -74,7 +79,6 @@ def parse_config(cfg, shared_vars):
                 new_value = int(new_value)
                 
             cfg[key] = new_value
-
  
 
 def pydantic2pandas(user):
