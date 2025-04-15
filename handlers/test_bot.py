@@ -13,6 +13,10 @@ from src.bot import CommonParamYouTube
 from src.MiddleWare import SharedContextMiddleware
 from src import utils as ut
 import pandas as pd
+from src.Users import Level
+
+
+
 class CommonParamTick(CallbackData, prefix="tick"):
     # id: str
     title: str
@@ -101,7 +105,7 @@ async def cmd_test2(message: types.Message, logger):
     )
 
 @router.message(Command("bugaga"))
-async def cmd_mem_0(message: types.Message, logger):
+async def cmd_mem_0(message: types.Message, logger, cfg):
     user = message.from_user
     
     id = int(message.text.split(' ')[1])
@@ -116,21 +120,18 @@ async def cmd_mem_0(message: types.Message, logger):
         )
     except IndexError:
         logger.info(f'{id} dont reg')
-        await message.answer(
-        f"Ти не зареганий натисни /start"
-        )
+        await message.answer(f"Ти не зареганий натисни /start")
     except Exception as e:
         logger.exception(f'{id} dont reg')
-        await message.answer(
-        f"помилка {e}"
-        )
+        await message.answer(f"помилка {e}")
 
-@router.message(Command("users"))
-async def cmd_users(message: types.Message, logger):
+@router.message(Command("chels"))
+async def cmd_users(message: types.Message, logger, cfg):
     user = message.from_user
-    logger.trace(f'{user.id} run users')
+    logger.trace(f'{user.id} run show   users')
+    prj_root = cfg.shared_vars.get('prj_root')
 
-    csv_path = '/home/sheva/projects/shev_prj/tele_bot/data/reg_user.csv'
+    csv_path = f'{prj_root}/data/reg_user.csv'
 
     if not os.path.isfile(csv_path):
         await message.reply("⚠️ Файл з користувачами не знайдено.")
@@ -138,16 +139,32 @@ async def cmd_users(message: types.Message, logger):
 
     try:
         df_user = pd.read_csv(csv_path)
-        df_user = df_user.iloc[:, [0,3,4,9]]
+        df_user = df_user.loc[:, ['id', 'username', 'full_name', 'level', 'use_memory']]
         if df_user.empty:
             await message.reply("🗃️ Таблиця користувачів порожня.")
             return
+        
+        df_display =  df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
 
+        # change value in column use_memmory to percent 0 to 100 using column level . Level it iis max 100 %  
+        get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
+        df_display['level'] = df_display['level'].map(get_bytes4level)
+        df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 1).astype(str) + '%'
+        # show even if nick or name is None
+        df_display = df_display.replace(to_replace=[None], value='-')
+        # show nick and name max len 9
+        df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
+        # df_display['nick/name'] = df_display['nick'] + '/' + df_display['name']
+        df_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
+        logger.trace(df_display)
+
+
+        # df_display['use_mem'] = df_display['use_mem'] / df_display['level'] * 100
         # Преобразуємо таблицю в текст, екрануємо HTML
-        text_table = html.escape(df_user.to_string(index=False))
+        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
 
         await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
 
     except Exception as e:
-        logger.error(f"Помилка при зчитуванні користувачів: {e}")
+        logger.exception(f"Помилка при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
