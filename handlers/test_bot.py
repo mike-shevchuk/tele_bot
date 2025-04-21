@@ -150,7 +150,8 @@ async def cmd_users(message: types.Message, logger, cfg):
         get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
         df_display['level'] = df_display['level'].map(get_bytes4level)
         df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 1).astype(str) + '%'
-        # show even if nick or name is None
+        df_display['size%'] = df_display['size%'].astype(str).str.replace('%', '', regex=False).astype(float)
+        df_display = df_display.sort_values(by='size%', ascending=False)
         df_display = df_display.replace(to_replace=[None], value='-')
         # show nick and name max len 9
         df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
