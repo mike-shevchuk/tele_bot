@@ -71,10 +71,8 @@ class Bot_Func:
             await user_msg.reply(f"An error occurred: {e}")
             return
 
-        print(loc_video)
         pattern = glob.escape(loc_video) + '*'
         loc_match = glob.glob(os.path.join('.', pattern))
-        print(loc_match)
 
         loc_video  = loc_match[0]
         # await info_wait_button.delete()
