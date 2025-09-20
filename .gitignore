@@ -179,3 +179,6 @@ assets
 *_test*.py
 data/reg_user.csv
 .vscode
+.vscode
+.env.save
+.env.txt

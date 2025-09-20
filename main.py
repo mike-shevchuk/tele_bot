@@ -7,30 +7,17 @@ from dotenv import load_dotenv
 import pandas as pd
 import loguru
 from pprint import pprint
-
-from src.Users import UserTele
-from src.bot import Bot_Func
-from src import utils as ut
 import jinja2
 
-
-
-from aiogram import F, Bot, Dispatcher, types, Router
-from aiogram.filters.command import Command
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
-from src.MiddleWare import SharedContextMiddleware
-from handlers import test_bot
-
 # from aiogram.filters import Text
-
 from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
-from src.MiddleWare import SharedContextMiddleware
 from handlers import test_bot, media_bot
 
 # from aiogram.filters import Text
 
+from src.MiddleWare import SharedContextMiddleware
 from src.Users import UserTele
 from src.bot import Bot_Func
 from src import utils as ut
@@ -85,12 +72,12 @@ async def start_user(message:types.Message):
 async def cmd_numbers(message: types.Message):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
-    df_t = ut.get_user_by_id(user_bot.id)
+    df_user = ut.get_user_by_id(user_bot.id)
 
-    if df_t.empty:
+    if df_user.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
-    user = ut.pandas2pydentic(df_t)
+    user = ut.pandas2pydentic(df_user)
     available_memory = user.level.value - user.use_memory
     logger.info(f'User {user.id} has {ut.h_readable(available_memory)=}')
     
@@ -126,16 +113,16 @@ async def cmd_numbers(message: types.Message):
 @dp.message(lambda msg: any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
+    df_user = ut.get_user_by_id(user_bot.id)
     environment = jinja2.Environment()
     answer_template = environment.from_string(
         "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{url}}"
     )
-    if df_t.empty:
+    if df_user.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
     
-    user = ut.pandas2pydentic(df_t)
+    user = ut.pandas2pydentic(df_user)
     availMemory = user.level.value - user.use_memory
     logger.info(f'User {user.id} has {ut.h_readable(availMemory)=}')
     if availMemory < 0:
