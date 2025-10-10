@@ -15,7 +15,16 @@ from src.Errors import CSVError
 
 root_prj = Path(__file__).parent.parent.absolute()
 
-
+# get name or nickname from username or full_name something that exists in db
+def get_name_from_pydantic(user: UserTele):
+    username = user.username
+    full_name = user.full_name
+    if username:
+        return username
+    elif full_name:
+        return full_name
+    else:
+        return user.id
 
 def crt_cfg_params(cfg_params):
     cfg = load_config('configs/cfg.yml')

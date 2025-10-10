@@ -74,7 +74,7 @@ async def start_user(message:types.Message):
         df = ut.pydantic2pandas(usr)
         all_df = pd.concat([users_reg_df, df])   #.reset_index(drop=True)
         ut.save_reg_user(all_df)
-        logger.debug(f'Add new user {usr.id} ')
+        logger.debug(f'Add new user {usr.id} {ut.get_name_from_pydantic(usr)}')
         await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
     else:
         await message.answer(f'Скучали за тобою {usr.id}')
@@ -92,7 +92,7 @@ async def cmd_numbers(message: types.Message):
         return
     user = ut.pandas2pydentic(df_t)
     available_memory = user.level.value - user.use_memory
-    logger.info(f'User {user.id} has {ut.h_readable(available_memory)=}')
+    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(available_memory)=}')
     
     if available_memory < 0:
         await message.reply(f"Ви використали свій ліміт({ut.h_readable(user.level.value)})"+
@@ -101,7 +101,7 @@ async def cmd_numbers(message: types.Message):
     
     wait_bot_msg = await message.reply(f"Твоя лінка на youtube повідомлення опрацьовується!\
                                         У тебе лишилося {ut.h_readable(available_memory)}")
-    logger.success(f'Хапнули лінку {link} --> {user.id}')
+    logger.success(f'Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}')
     user_data[message.from_user.id] = link  # Save the link to user_data
     res = bot_func.get_keyboard(link)
     if not res:
@@ -137,7 +137,7 @@ async def handle_inst_tick(message: types.Message, cfg):
     
     user = ut.pandas2pydentic(df_t)
     availMemory = user.level.value - user.use_memory
-    logger.info(f'User {user.id} has {ut.h_readable(availMemory)=}')
+    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(availMemory)=}')
     if availMemory < 0:
         await message.reply(
             f"Ви використали свій ліміт({ut.h_readable(user.level.value)}) на цей місяць,"+
@@ -156,7 +156,7 @@ async def handle_inst_tick(message: types.Message, cfg):
     res = await bot_func.get_dwn_media(ydl_opts, message)
     if not res:
         await message.answer('Filed download media please check your link')
-        logger.warning(f'Failed to download media with link {message.text}\n\n\n')
+        logger.warning(f'Failed to download media user {user.id} {ut.get_name_from_pydantic(user)} with link {message.text}\n\n\n')
         return
     loc_video, file_size = res
 
