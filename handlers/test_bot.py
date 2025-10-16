@@ -106,8 +106,16 @@ async def cmd_test2(message: types.Message, logger):
 
 @router.message(Command("bugaga"))
 async def cmd_mem_0(message: types.Message, logger, cfg):
-    user = message.from_user
-    
+    # user = message.from_user
+    user_bot = message.from_user
+    df_t = ut.get_user_by_id(user_bot.id)
+
+    if df_t.empty:
+        await message.reply(f"Ти не зареганий натисни /start")
+        return
+    user = ut.pandas2pydentic(df_t)
+    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} run to clear memory')
+
     id = int(message.text.split(' ')[1])
     try:
         user_df = ut.get_user_by_id(id)
@@ -127,8 +135,16 @@ async def cmd_mem_0(message: types.Message, logger, cfg):
 
 @router.message(Command("chels"))
 async def cmd_users(message: types.Message, logger, cfg):
-    user = message.from_user
-    logger.trace(f'{user.id} run show   users')
+    user_bot = message.from_user
+    df_t = ut.get_user_by_id(user_bot.id)
+
+    if df_t.empty:
+        await message.reply(f"Ти не зареганий натисни /start")
+        return
+    user = ut.pandas2pydentic(df_t)
+    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} run show all users')
+  
+    # logger.trace(f'{user.id} run show   users')
     prj_root = cfg.shared_vars.get('prj_root')
 
     csv_path = f'{prj_root}/data/reg_user.csv'
