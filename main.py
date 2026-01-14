@@ -75,7 +75,7 @@ async def start_user(message:types.Message):
         all_df = pd.concat([users_reg_df, df])   #.reset_index(drop=True)
         ut.save_reg_user(all_df)
         logger.debug(f'Add new user {usr.id} {ut.get_name_from_pydantic(usr)}')
-        await message.answer(f'Ти хто {usr.id}? ми тебе пробиваємо')
+        await message.answer(f'Все готово. Гарного користування!')
     else:
         await message.answer(f'Скучали за тобою {usr.id}')
         return 
