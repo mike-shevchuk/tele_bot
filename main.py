@@ -85,6 +85,8 @@ async def start_user(message:types.Message):
 async def cmd_numbers(message: types.Message):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
+    link = link.split('&list')[0]
+    logger.info(f'{link=}')
     df_t = ut.get_user_by_id(user_bot.id)
 
     if df_t.empty:
