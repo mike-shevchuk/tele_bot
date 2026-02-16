@@ -102,7 +102,7 @@ async def cmd_numbers(message: types.Message):
         return
     
     wait_bot_msg = await message.reply(f"Твоя лінка на youtube повідомлення опрацьовується!\
-                                        У тебе лишилося {ut.h_readable(available_memory)}")
+                                        У тебе лишилося {ut.h_readable(available_memory)}", disable_notification=True)
     logger.success(f'Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}')
     user_data[message.from_user.id] = link  # Save the link to user_data
     res = bot_func.get_keyboard(link)
