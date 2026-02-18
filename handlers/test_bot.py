@@ -136,7 +136,7 @@ async def cmd_mem_0(message: types.Message, logger, cfg):
 @router.message(Command("chels"))
 async def cmd_users(message: types.Message, logger, cfg):
     user_bot = message.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
+    df_t: pd.DataFrame = ut.get_user_by_id(user_bot.id)
 
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
@@ -184,4 +184,49 @@ async def cmd_users(message: types.Message, logger, cfg):
 
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
+        await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
+
+
+@router.message(Command("schels"))
+async def cd_users(message: types.Message, logger, cfg):
+    user_bot  = message.from_user
+    df_t: pd.DataFrame = ut.get_user_by_id(user_bot.id)
+    if df_t.empty:
+        await message.reply(f"Ти не зареганий натисти /start")
+        return
+    user = ut.pandas2pydentic(df_t)
+    logger.info(f'Users {user.id} {ut.get_name_from_pydantic(user)} run show all users')
+    
+    prj_root = cfg.shared_vars.get('prj_root')
+
+    csv_path = f'{prj_root}/data/reg_user.csv'
+
+    if not os.path.isfile(csv_path):
+        await message.reply('Файл з користувачами не знайдено')
+        return
+    
+    try:
+        df_user=pd.read_csv(csv_path)
+        df_user=df_user.loc[:, ['id', 'username', 'full_name', 'level', 'use_memory']]
+        if df_user.empty:
+            await message.reply('Таблиця користувачів порожня')
+            return
+        df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
+
+
+        get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
+        df_display['level'] = df_display['level'].map(get_bytes4level)
+        df_display['size_left']=round((df_display['level'] - df_display['use_memory'])/(1024*1024), 2).astype(str) + " MB"
+        df_display=df_display.sort_values(by='size_left', ascending=False)
+        df_display=df_display.replace(to_replace=[None], value='-')
+        df_display['nick/name']=df_display['nick'].str[:13]+'/'+df_display['name'].str[:7]
+        df_display=df_display.loc[:, ['ID', 'nick/name', 'size_left']]
+        logger.trace(df_display)
+
+        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
+
+        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+
+    except Exception as e:
+        logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
