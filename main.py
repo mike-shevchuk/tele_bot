@@ -200,5 +200,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    print('The project path ' + str(ut.get_prj_root()))
     asyncio.run(main())
     # executor.start_polling(dp, loop=loop, skip_updates=True)
