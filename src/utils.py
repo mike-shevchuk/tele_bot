@@ -247,3 +247,8 @@ def ln_2_cr(sent: str) -> str:
 
 def is_ltn(sent:str) -> bool:
     return sent == sent.encode('utf-8')
+
+def get_prj_root():
+    root_path = Path.cwd()
+    return root_path
+
