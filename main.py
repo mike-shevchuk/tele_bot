@@ -13,16 +13,6 @@ from src.bot import Bot_Func
 from src import utils as ut
 import jinja2
 
-
-
-from aiogram import F, Bot, Dispatcher, types, Router
-from aiogram.filters.command import Command
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
-from src.MiddleWare import SharedContextMiddleware
-from handlers import test_bot
-
-# from aiogram.filters import Text
-
 from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
@@ -51,7 +41,7 @@ dp = Dispatcher()
 @dp.message(Command("start"))
 async def start_user(message:types.Message):
     users_reg_df: pd.DataFrame  = ut.get_reg_users()
-    user_org = message.from_user
+    user_org: types.user.User = message.from_user
 
     try:
         usr = UserTele(
