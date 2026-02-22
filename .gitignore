@@ -177,5 +177,6 @@ media
 assets
 
 *_test*.py
+**/*test*.py
 data/reg_user.csv
 .vscode
