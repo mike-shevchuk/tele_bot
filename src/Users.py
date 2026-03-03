@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Union, Optional
+from typing import Optional
 from enum import Enum
 
 
@@ -14,20 +14,20 @@ class Level(Enum):
     
 
 class UserTele(BaseModel):
-    id: int
+    id: int = Field(..., description='Telegram user id. Examples: 1234567')
     # chat_id: int
-    is_bot: bool
-    language_code:  Union[str, None]
+    is_bot: bool = Field(..., description='Param is it user or bot. Examples: True/False')
+    language_code:  Optional[str] = Field(description='Telegram UI language. Examples: en')
     
-    username: Union[str, None] = Field(default='uknown')
-    full_name: str = Field(default='uknown')
-    first_name: str = Field(default='uknown')    
-    last_name: Union[str, None] = Field(default='uknown')
-    is_premium: Union[bool, None]
+    username: Optional[str] = Field(default='uknown', description='Name of user. Example: ASSassin007')
+    full_name: str = Field(default='uknown', description='Users full name: Van Darkholme')
+    first_name: str = Field(default='uknown', description='Users first name. Example: Van')    
+    last_name: Optional[str] = Field(default='uknown', description='Users last name. Example: Darkholme')
+    is_premium: Optional[bool] = Field(description='Is user premium. Example: True/False')
     
-    level: Level = Field(default=Level.chel)
+    level: Level = Field(default=Level.chel, description='Users level. Example: dubil')
     # free_memory: float = level.value
-    use_memory: float = 0
+    use_memory: float = Field(default=0, description='Used memory. Example: 0') 
 
 
     @classmethod
