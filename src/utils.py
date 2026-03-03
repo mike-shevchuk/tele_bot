@@ -26,6 +26,14 @@ def get_name_from_pydantic(user: UserTele):
     else:
         return user.id
 
+def progress_bar_str(current, max_value, length=8):
+    percent = 100 * current / max_value
+    percent = round(percent, 2)
+    filled = int(length * current // max_value)
+    filled = max(1, filled)
+    bar = '🟥' * filled + '🟩' * (length - filled)
+    return f'{bar} {percent} %'
+
 def crt_cfg_params(cfg_params):
     cfg = load_config('configs/cfg.yml')
     cfg_params_copy = edict(cfg_params.copy())

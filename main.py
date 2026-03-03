@@ -120,9 +120,11 @@ async def cmd_numbers(message: types.Message):
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
+
+
     environment = jinja2.Environment()
     answer_template = environment.from_string(
-        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{url}}"
+        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progres_bar_str_value}}\n\n{{url}}"
     )
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
@@ -155,10 +157,13 @@ async def handle_inst_tick(message: types.Message, cfg):
 
 
     availMemory -= file_size
-    
+    total_mem_user_level = user.level.value
+    used_memmory_pre_user = user.use_memory
+
     answer_cap = answer_template.render(
         bot_name = cfg.shared_vars.bot_name, 
         avail_mem = ut.h_readable(availMemory),
+        progres_bar_str_value = ut.progress_bar_str(used_memmory_pre_user, total_mem_user_level),
         url = message.text
     )
     
