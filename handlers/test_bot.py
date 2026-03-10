@@ -106,13 +106,10 @@ async def cmd_test2(message: types.Message, logger):
 @router.message(Command("bugaga"))
 async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
     caller = message.from_user
-    caller_df = ut.get_user_by_id(caller.id)
-
-    if caller_df.empty:
+    if ut.get_user_by_id(caller.id).empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
-    caller_user = ut.pandas2pydentic(caller_df)
-    logger.info(f'User {caller_user.id} {ut.get_name_from_pydantic(caller_user)} run to clear memory')
+    logger.info(f'User {caller.id} {caller.full_name} run to clear memory')
 
     target_id = int(message.text.split(' ')[1])
     try:
@@ -122,10 +119,12 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         ut.update_row(target_user)
         logger.info(f'set memory on 0 for {target_id}')
         await message.answer(f"скинули {target_id} використану пам'ять 0")
+        logger.info(f'Sending reset notification to {target_id}')
         await bot.send_message(
             chat_id=target_id,
             text="Йоу! 🎉 Твій ліміт щойно обнулили!\nКачай скільки душа забажає (але не дуже, бо знову скінчиться 😏)"
         )
+        logger.info(f'Notification sent to {target_id}')
     except IndexError:
         logger.info(f'{target_id} dont reg')
         await message.answer(f"Ти не зареганий натисни /start")
@@ -163,21 +162,23 @@ async def _load_users_df(message: types.Message, logger, cfg):
     return df_display
 
 
+async def _reply_users_table(df_display, col: str, message: types.Message, logger):
+    """Sort by col, select display columns, and reply with formatted table."""
+    df_display = df_display.sort_values(by=col, ascending=False)
+    df_display = df_display.loc[:, ['ID', 'nick/name', col]]
+    logger.trace(df_display)
+    text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
+    await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+
+
 @router.message(Command("chels"))
 async def cmd_show_users_pct(message: types.Message, logger, cfg):
     try:
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-
         df_display['size%'] = round(df_display['use_memory'] / df_display['level'] * 100, 1)
-        df_display = df_display.sort_values(by='size%', ascending=False)
-        df_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
-        logger.trace(df_display)
-
-        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
-        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
-
+        await _reply_users_table(df_display, 'size%', message, logger)
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
@@ -189,15 +190,8 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-
         df_display['size_left'] = round((df_display['level'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
-        df_display = df_display.sort_values(by='size_left', ascending=False)
-        df_display = df_display.loc[:, ['ID', 'nick/name', 'size_left']]
-        logger.trace(df_display)
-
-        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
-        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
-
+        await _reply_users_table(df_display, 'size_left', message, logger)
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
