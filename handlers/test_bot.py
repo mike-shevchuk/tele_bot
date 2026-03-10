@@ -3,7 +3,6 @@ from aiogram.enums import ParseMode
 from aiogram.types import Message
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 from uuid import uuid4
-import asyncio
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
@@ -122,12 +121,10 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         target_user.use_memory = 0
         ut.update_row(target_user)
         logger.info(f'set memory on 0 for {target_id}')
-        await asyncio.gather(
-            message.answer(f"скинули {target_id} використану пам'ять 0"),
-            bot.send_message(
-                chat_id=target_id,
-                text="Йоу! 🎉 Твій ліміт щойно обнулили!\nКачай скільки душа забажає (але не дуже, бо знову скінчиться 😏)"
-            )
+        await message.answer(f"скинули {target_id} використану пам'ять 0")
+        await bot.send_message(
+            chat_id=target_id,
+            text="Йоу! 🎉 Твій ліміт щойно обнулили!\nКачай скільки душа забажає (але не дуже, бо знову скінчиться 😏)"
         )
     except IndexError:
         logger.info(f'{target_id} dont reg')
