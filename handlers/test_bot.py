@@ -174,7 +174,12 @@ async def cmd_users(message: types.Message, logger, cfg):
 
         # change value in column use_memmory to percent 0 to 100 using column level . Level it iis max 100 %  
         get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
-        df_display['level'] = df_display['level'].map(get_bytes4level)
+        # get_level_name = lambda x: Level.__members__.get((x).split('.')[-1]).name
+        get_level_name = lambda x: x.split('.')[-1]
+        
+        # df_display['level_name'] = df_display['level'].map(get_level_name)
+        df_display['level_name'] = df_display['level'].map(get_level_name)
+        df_display['level'] = df_display['level'].map(get_bytes4level)        
         df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 1).astype(str) + '%'
         df_display['size%'] = df_display['size%'].astype(str).str.replace('%', '', regex=False).astype(float)
         df_display = df_display.sort_values(by='size%', ascending=False)
@@ -182,13 +187,14 @@ async def cmd_users(message: types.Message, logger, cfg):
         # show nick and name max len 9
         df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
         # df_display['nick/name'] = df_display['nick'] + '/' + df_display['name']
-        df_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
-        logger.trace(df_display)
+        df_show_display = df_display.loc[:, ['level_name', 'nick/name', 'size%']]
+        df_log_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
+        logger.trace(df_log_display)
 
 
         # df_display['use_mem'] = df_display['use_mem'] / df_display['level'] * 100
         # Преобразуємо таблицю в текст, екрануємо HTML
-        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
+        text_table = html.escape(df_show_display.to_string(index=False, justify='left', col_space=10))
 
         await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
 
