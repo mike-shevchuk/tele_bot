@@ -196,7 +196,12 @@ async def cmd_users(message: types.Message, logger, cfg):
         # Преобразуємо таблицю в текст, екрануємо HTML
         text_table = html.escape(df_show_display.to_string(index=False, justify='left', col_space=10))
 
-        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+        if user.level == Level.admin or user.level == Level.vip:
+            await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+        else:
+            await message.reply("Вибачте, але ви не маєте доступу до цієї команди.")
+        logger.info(f'>>>>>>>>>>>>>>>>>>>>{user.level}')
+
 
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
