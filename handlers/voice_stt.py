@@ -23,7 +23,7 @@ STT_HEALTH_URL = f"http://{STT_HOST}:{STT_PORT}/health"
 async def _check_health(logger) -> bool:
     """Check if STT service is alive."""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=3, read=5)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5, connect=3)) as client:
             resp = await client.get(STT_HEALTH_URL)
             logger.info(f"STT health: status={resp.status_code}, body={resp.text}")
             return resp.status_code == 200
