@@ -72,7 +72,7 @@ async def start_user(message:types.Message):
         return 
 
 
-@dp.message(lambda msg: any(link in msg.text for link in ['youtu.be', 'youtube.com']))
+@dp.message(lambda msg: msg.text and any(link in msg.text for link in ['youtu.be', 'youtube.com']))
 async def cmd_numbers(message: types.Message):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
@@ -116,7 +116,7 @@ async def cmd_numbers(message: types.Message):
 
 
 
-@dp.message(lambda msg: any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
+@dp.message(lambda msg: msg.text and any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
