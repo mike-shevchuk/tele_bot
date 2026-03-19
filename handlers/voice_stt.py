@@ -10,20 +10,22 @@ STT_HOST = os.getenv("STT_HOST", "192.168.50.48")
 STT_PORT = os.getenv("STT_PORT", "8069")
 STT_LANG = os.getenv("STT_LANG", "uk")
 STT_MODEL = os.getenv("STT_MODEL", "large-v3-turbo")
-STT_URL = f"http://{STT_HOST}:{STT_PORT}/transcribe"
+STT_URL = f"https://{STT_HOST}:{STT_PORT}/transcribe"
 
 STT_TIMEOUT = httpx.Timeout(connect=5, read=300, write=30, pool=5)
+# Self-signed cert on STT host
+STT_VERIFY = False
 
 TG_MSG_LIMIT = 4096
 
 
-STT_HEALTH_URL = f"http://{STT_HOST}:{STT_PORT}/health"
+STT_HEALTH_URL = f"https://{STT_HOST}:{STT_PORT}/health"
 
 
 async def _check_health(logger) -> bool:
     """Check if STT service is alive."""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5, connect=3)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5, connect=3), verify=STT_VERIFY) as client:
             resp = await client.get(STT_HEALTH_URL)
             logger.info(f"STT health: status={resp.status_code}, body={resp.text}")
             return resp.status_code == 200
@@ -34,7 +36,7 @@ async def _check_health(logger) -> bool:
 
 async def _transcribe(audio: bytes, suffix: str) -> httpx.Response:
     """Send audio to STT service."""
-    async with httpx.AsyncClient(timeout=STT_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=STT_TIMEOUT, verify=STT_VERIFY) as client:
         return await client.post(
             STT_URL,
             params={"language": STT_LANG, "model": STT_MODEL},
