@@ -13,27 +13,18 @@ STT_MODEL = os.getenv("STT_MODEL", "large-v3-turbo")
 STT_URL = f"http://{STT_HOST}:{STT_PORT}/transcribe"
 
 STT_TIMEOUT = httpx.Timeout(connect=5, read=300, write=30, pool=5)
-MAX_RETRIES = 2
 
 TG_MSG_LIMIT = 4096
 
 
 async def _transcribe(audio: bytes, suffix: str) -> httpx.Response:
-    """Send audio to STT service with retry on disconnect."""
-    last_exc = None
-    for attempt in range(1, MAX_RETRIES + 1):
-        async with httpx.AsyncClient(timeout=STT_TIMEOUT) as client:
-            try:
-                return await client.post(
-                    STT_URL,
-                    files={"file": (f"audio{suffix}", audio)},
-                    data={"language": STT_LANG, "model": STT_MODEL},
-                )
-            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
-                last_exc = e
-                if attempt < MAX_RETRIES:
-                    continue
-                raise last_exc
+    """Send audio to STT service."""
+    async with httpx.AsyncClient(timeout=STT_TIMEOUT) as client:
+        return await client.post(
+            STT_URL,
+            params={"language": STT_LANG, "model": STT_MODEL},
+            files={"file": (f"audio{suffix}", audio)},
+        )
 
 
 @router_stt.message(F.voice | F.audio)
@@ -82,7 +73,7 @@ async def handle_voice(message: types.Message, bot: Bot, logger):
         logger.error(f"STT service unreachable at {STT_URL}")
         await wait_msg.edit_text(f"STT сервіс недоступний ({STT_HOST}:{STT_PORT})")
     except (httpx.RemoteProtocolError, httpx.ReadError) as e:
-        logger.error(f"STT server disconnected after {MAX_RETRIES} attempts: {e}")
+        logger.error(f"STT server disconnected: {e}")
         await wait_msg.edit_text(f"STT сервер розірвав з'єднання. Спробуйте ще раз.")
     except Exception as e:
         logger.exception(f"STT failed: {e}")
