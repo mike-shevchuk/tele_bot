@@ -18,7 +18,7 @@ from aiogram.filters.command import Command
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.types.user import User as TgUser
 from src.MiddleWare import SharedContextMiddleware
-from handlers import test_bot, media_bot
+from handlers import test_bot, media_bot, voice_stt
 
 # from aiogram.filters import Text
 
@@ -197,7 +197,7 @@ async def main():
     # dp.message.middleware(sharedContextMiddleware)
     dp.update.middleware(sharedContextMiddleware)
     
-    dp.include_routers(test_bot.router, media_bot.router_med)
+    dp.include_routers(test_bot.router, media_bot.router_med, voice_stt.router_stt)
     await dp.start_polling(bot)
 
 
