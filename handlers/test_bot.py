@@ -140,6 +140,21 @@ async def _load_users_df(message: types.Message, logger, cfg):
         return None
     logger.info(f'User {caller.id} run show all users')
 
+@router.message(Command("me"))
+async def cmd(message: types.Message, logger, cfg):
+    user_bot = message.from_user
+    df_t = ut.get_user_by_id(user_bot.id)
+    if df_t.empty:
+        await message.reply(f"Ти не зареганий натисни /start")
+        return
+    user = ut.pandas2pydentic(df_t)
+    await message.reply(f"Тебе звати: {ut.get_name_from_pydantic(user)} , твоє ID: {user.id}")
+
+@router.message(Command("chels"))
+async def cmd_users(message: types.Message, logger, cfg):
+    user_bot = message.from_user
+    df_t: pd.DataFrame = ut.get_user_by_id(user_bot.id)
+
     prj_root = cfg.shared_vars.get('prj_root')
     csv_path = f'{prj_root}/data/reg_user.csv'
 
