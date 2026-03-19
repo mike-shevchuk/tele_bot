@@ -3,7 +3,6 @@ from aiogram.enums import ParseMode
 from aiogram.types import Message
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 from uuid import uuid4
-import os
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
@@ -83,7 +82,7 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger):
 
 
 @router.message(Command("test0"))
-async def cmd_start(message: Message, logger, foo: int, bar: str):
+async def cmd_test0(message: Message, logger, foo: int, bar: str):
     logger.info(f"Received /test0 command with foo={foo} and bar={bar}")
     await message.answer(f"Hello! foo={foo}, bar={bar}")
 
@@ -105,33 +104,41 @@ async def cmd_test2(message: types.Message, logger):
     )
 
 @router.message(Command("bugaga"))
-async def cmd_mem_0(message: types.Message, logger, cfg):
-    # user = message.from_user
-    user_bot = message.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
-
-    if df_t.empty:
+async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
+    caller = message.from_user
+    if ut.get_user_by_id(caller.id).empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
-    user = ut.pandas2pydentic(df_t)
-    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} run to clear memory')
+    logger.info(f'User {caller.id} {caller.full_name} run to clear memory')
 
-    id = int(message.text.split(' ')[1])
+    target_id = int(message.text.split(' ')[1])
     try:
-        user_df = ut.get_user_by_id(id)
-        user = ut.pandas2pydentic(user_df)
-        user.use_memory = 0
-        ut.update_row(user)
-        logger.info(f'set memory on 0 for {id}')
-        await message.answer(
-            f"скинули {id} використану пам'ять 0"
+        target_df = ut.get_user_by_id(target_id)
+        target_user = ut.pandas2pydentic(target_df)
+        target_user.use_memory = 0
+        ut.update_row(target_user)
+        logger.info(f'set memory on 0 for {target_id}')
+        await message.answer(f"скинули {target_id} використану пам'ять 0")
+        logger.info(f'Sending reset notification to {target_id}')
+        await bot.send_message(
+            chat_id=target_id,
+            text="Йоу! 🎉 Твій ліміт щойно обнулили!\nКачай скільки душа забажає (але не дуже, бо знову скінчиться 😏)"
         )
+        logger.info(f'Notification sent to {target_id}')
     except IndexError:
-        logger.info(f'{id} dont reg')
+        logger.info(f'{target_id} dont reg')
         await message.answer(f"Ти не зареганий натисни /start")
     except Exception as e:
-        logger.exception(f'{id} dont reg')
+        logger.exception(f'{target_id} dont reg')
         await message.answer(f"помилка {e}")
+
+async def _load_users_df(message: types.Message, logger, cfg):
+    """Load CSV user data. Returns df_display or None if error (reply already sent)."""
+    caller = message.from_user
+    if ut.get_user_by_id(caller.id).empty:
+        await message.reply("Ти не зареганий натисни /start")
+        return None
+    logger.info(f'User {caller.id} run show all users')
 
 @router.message(Command("me"))
 async def cmd(message: types.Message, logger, cfg):
@@ -148,95 +155,58 @@ async def cmd_users(message: types.Message, logger, cfg):
     user_bot = message.from_user
     df_t: pd.DataFrame = ut.get_user_by_id(user_bot.id)
 
-    if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
-        return
-    user = ut.pandas2pydentic(df_t)
-    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} run show all users')
-  
-    # logger.trace(f'{user.id} run show   users')
     prj_root = cfg.shared_vars.get('prj_root')
-
     csv_path = f'{prj_root}/data/reg_user.csv'
-
-    if not os.path.isfile(csv_path):
-        await message.reply("⚠️ Файл з користувачами не знайдено.")
-        return
 
     try:
         df_user = pd.read_csv(csv_path)
-        df_user = df_user.loc[:, ['id', 'username', 'full_name', 'level', 'use_memory']]
-        if df_user.empty:
-            await message.reply("🗃️ Таблиця користувачів порожня.")
+    except FileNotFoundError:
+        await message.reply("⚠️ Файл з користувачами не знайдено.")
+        return None
+
+    df_user = df_user.loc[:, ['id', 'username', 'full_name', 'level', 'use_memory']]
+    if df_user.empty:
+        await message.reply("🗃️ Таблиця користувачів порожня.")
+        return None
+
+    df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
+    level_to_bytes = lambda x: Level.__members__.get((x).split('.')[-1]).value
+    df_display['level'] = df_display['level'].map(level_to_bytes)
+    df_display[['nick', 'name']] = df_display[['nick', 'name']].fillna('-')
+    df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
+    return df_display
+
+
+async def _reply_users_table(df_display, col: str, message: types.Message, logger):
+    """Sort by col, select display columns, and reply with formatted table."""
+    df_display = df_display.sort_values(by=col, ascending=False)
+    df_display = df_display.loc[:, ['ID', 'nick/name', col]]
+    logger.trace(df_display)
+    text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
+    await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
+
+
+@router.message(Command("chels"))
+async def cmd_show_users_pct(message: types.Message, logger, cfg):
+    try:
+        df_display = await _load_users_df(message, logger, cfg)
+        if df_display is None:
             return
-        
-        df_display =  df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
-
-        # change value in column use_memmory to percent 0 to 100 using column level . Level it iis max 100 %  
-        get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
-        df_display['level'] = df_display['level'].map(get_bytes4level)
-        df_display['size%'] = round((100 - (df_display['level'] - df_display['use_memory']) / df_display['level'] * 100), 1).astype(str) + '%'
-        df_display['size%'] = df_display['size%'].astype(str).str.replace('%', '', regex=False).astype(float)
-        df_display = df_display.sort_values(by='size%', ascending=False)
-        df_display = df_display.replace(to_replace=[None], value='-')
-        # show nick and name max len 9
-        df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
-        # df_display['nick/name'] = df_display['nick'] + '/' + df_display['name']
-        df_display = df_display.loc[:, ['ID', 'nick/name', 'size%']]
-        logger.trace(df_display)
-
-
-        # df_display['use_mem'] = df_display['use_mem'] / df_display['level'] * 100
-        # Преобразуємо таблицю в текст, екрануємо HTML
-        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
-
-        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
-
+        df_display['size%'] = round(df_display['use_memory'] / df_display['level'] * 100, 1)
+        await _reply_users_table(df_display, 'size%', message, logger)
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
 
 
 @router.message(Command("schels"))
-async def cd_users(message: types.Message, logger, cfg):
-    user_bot  = message.from_user
-    df_t: pd.DataFrame = ut.get_user_by_id(user_bot.id)
-    if df_t.empty:
-        await message.reply(f"Ти не зареганий натисти /start")
-        return
-    user = ut.pandas2pydentic(df_t)
-    logger.info(f'Users {user.id} {ut.get_name_from_pydantic(user)} run show all users')
-    
-    prj_root = cfg.shared_vars.get('prj_root')
-
-    csv_path = f'{prj_root}/data/reg_user.csv'
-
-    if not os.path.isfile(csv_path):
-        await message.reply('Файл з користувачами не знайдено')
-        return
-    
+async def cmd_show_users_mb(message: types.Message, logger, cfg):
     try:
-        df_user=pd.read_csv(csv_path)
-        df_user=df_user.loc[:, ['id', 'username', 'full_name', 'level', 'use_memory']]
-        if df_user.empty:
-            await message.reply('Таблиця користувачів порожня')
+        df_display = await _load_users_df(message, logger, cfg)
+        if df_display is None:
             return
-        df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
-
-
-        get_bytes4level = lambda x: Level.__members__.get((x).split('.')[-1]).value
-        df_display['level'] = df_display['level'].map(get_bytes4level)
-        df_display['size_left']=round((df_display['level'] - df_display['use_memory'])/(1024*1024), 2).astype(str) + " MB"
-        df_display=df_display.sort_values(by='size_left', ascending=False)
-        df_display=df_display.replace(to_replace=[None], value='-')
-        df_display['nick/name']=df_display['nick'].str[:13]+'/'+df_display['name'].str[:7]
-        df_display=df_display.loc[:, ['ID', 'nick/name', 'size_left']]
-        logger.trace(df_display)
-
-        text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
-
-        await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
-
+        df_display['size_left'] = round((df_display['level'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
+        await _reply_users_table(df_display, 'size_left', message, logger)
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
