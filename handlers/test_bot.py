@@ -164,9 +164,11 @@ async def _load_users_df(message: types.Message, logger, cfg):
         await message.reply("🗃️ Таблиця користувачів порожня.")
         return None
 
-    df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name'})
+    df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name', 'level': 'level_memory'})
     level_to_bytes = lambda x: Level.__members__.get((x).split('.')[-1]).value
-    df_display['level'] = df_display['level'].map(level_to_bytes)
+    name4bytes = lambda x: str(Level.__members__.get((x).split('.')[-1])).split('.')[-1]
+    df_display['level'] = df_display['level_memory'].map(name4bytes)
+    df_display['level_memory'] = df_display['level_memory'].map(level_to_bytes)
     df_display[['nick', 'name']] = df_display[['nick', 'name']].fillna('-')
     df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
     return df_display
@@ -175,7 +177,7 @@ async def _load_users_df(message: types.Message, logger, cfg):
 async def _reply_users_table(df_display, col: str, message: types.Message, logger):
     """Sort by col, select display columns, and reply with formatted table."""
     df_display = df_display.sort_values(by=col, ascending=False)
-    df_display = df_display.loc[:, ['ID', 'nick/name', col]]
+    df_display = df_display.loc[:, ['level', 'ID', 'nick/name', col]]
     logger.trace(df_display)
     text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
     await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
@@ -183,12 +185,19 @@ async def _reply_users_table(df_display, col: str, message: types.Message, logge
 
 @router.message(Command("chels"))
 async def cmd_show_users_pct(message: types.Message, logger, cfg):
+    user_bot = message.from_user
+    user_df = ut.get_user_by_id(user_bot.id)
+    user = ut.pandas2pydentic(user_df)
     try:
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['size%'] = round(df_display['use_memory'] / df_display['level'] * 100, 1)
-        await _reply_users_table(df_display, 'size%', message, logger)
+        df_display['size%'] = round(df_display['use_memory'] / df_display['level_memory'] * 100, 1)
+        logger.info(f'>>>>>>>>>>>>{user.level}')
+        if user.level == Level.vip or user.level == Level.admin:
+            await _reply_users_table(df_display, 'size%', message, logger)
+        else:
+            await message.reply('Вибачте, але у вас нема доступу до цієї команди')    
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
@@ -200,7 +209,7 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['size_left'] = round((df_display['level'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
+        df_display['size_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
         await _reply_users_table(df_display, 'size_left', message, logger)
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
