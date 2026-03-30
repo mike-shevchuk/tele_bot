@@ -203,14 +203,20 @@ async def cmd_show_users_pct(message: types.Message, logger, cfg):
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
 
 
-@router.message(Command("schels"))
+@router.message(Command("specs"))
 async def cmd_show_users_mb(message: types.Message, logger, cfg):
+    user_bot = message.from_user
+    user_df = ut.get_user_by_id(user_bot.id)
+    user = ut.pandas2pydentic(user_df)
     try:
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
         df_display['size_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
-        await _reply_users_table(df_display, 'size_left', message, logger)
+        if user.level == 'admin' or user.level == 'vip':
+            await _reply_users_table(df_display, 'size_left', message, logger)
+        else:
+            await message.reply('Вибачте, але у вас нема доступу до цієї команди')
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
