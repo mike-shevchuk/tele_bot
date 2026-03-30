@@ -46,9 +46,9 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     user = ut.pandas2pydentic(user_df)
 
     total_mem_user_level = user.level.value
-    used_memmory_pre_user = user.use_memory
-    available_memory = total_mem_user_level - used_memmory_pre_user  
-    progres_bar_str_value = ut.progress_bar_str(used_memmory_pre_user, total_mem_user_level)
+    used_memory_pre_user = user.use_memory
+    available_memory = total_mem_user_level - used_memory_pre_user  
+    progres_bar_str_value = ut.progress_bar_str(used_memory_pre_user, total_mem_user_level)
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
