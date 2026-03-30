@@ -158,12 +158,12 @@ async def handle_inst_tick(message: types.Message, cfg):
 
     availMemory -= file_size
     total_mem_user_level = user.level.value
-    used_memmory_pre_user = user.use_memory
+    used_memory_pre_user = user.use_memory
 
     answer_cap = answer_template.render(
         bot_name = cfg.shared_vars.bot_name, 
         avail_mem = ut.h_readable(availMemory),
-        progres_bar_str_value = ut.progress_bar_str(used_memmory_pre_user, total_mem_user_level),
+        progres_bar_str_value = ut.progress_bar_str(used_memory_pre_user, total_mem_user_level),
         url = message.text
     )
     
