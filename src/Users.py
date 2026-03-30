@@ -42,7 +42,7 @@ class UserTele(BaseModel):
             last_name='uknown',
             is_premium = None,
             level = Level.test,
-            use_memmory = 0
+            use_memory = 0
         )
 
     def to_dict(self):
