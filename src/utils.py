@@ -7,6 +7,7 @@ import time
 import yaml
 from easydict import EasyDict as edict
 from srtools import cyrillic_to_latin, latin_to_cyrillic
+from functools import reduce
 import numpy as np
 import re
 from src.Users import UserTele, Level
