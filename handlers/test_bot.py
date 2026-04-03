@@ -155,6 +155,7 @@ async def cmd_help(message: types.Message):
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
+        return
     await message.reply(
         "Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.\n"
         "\n"                       
