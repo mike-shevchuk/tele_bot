@@ -133,34 +133,42 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         await message.answer(f"помилка {e}")
 
 @router.message(Command("me"))
-async def cmd(message: types.Message):
+async def cmd_me(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
-    await message.reply(f"""Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}. Ти {user.level}.
-У тебе лишилось: {round((user.level.value - user.use_memory)/(1024*1024), 2)} з {round(user.level.value/(1024*1024), 2)} MB""")
+    total_mb = round(user.level.value/(1024**2), 2)
+    used_mb = round(user.use_memory/(1024**2), 2)
+    left_mb = total_mb-used_mb
+    await message.reply(
+        f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}.\n" 
+        f"Твій рівень: {str(user.level).split('.')[-1]}.\n"
+        f"У тебе лишилось: {left_mb} з {total_mb} MB"
+        )
 
 @router.message(Command("help"))
-async def cmd(message: types.Message):
+async def cmd_help(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
-    await message.reply("""Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.
-                        
-Що я вмію?
-                        
-Відео: Надішли посилання (YT, TikTok, Insta), обери якість — і отримуй файл у чат.
-
-Текст: Перешли мені голосове, і я миттєво зроблю з нього розшифровку.
-
-Команди:
-/me — твій профіль та залишок пам'яті.
-
-Просто надішли посилання або "войс", щоб почати!""")
+    await message.reply(
+        "Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.\n"
+        "\n"                       
+        "Що я вмію?\n"
+        "\n"                    
+        "Відео: Надішли посилання (YT, TikTok, Insta), обери якість — і отримуй файл у чат.\n"
+        "\n"
+        "Текст: Перешли мені голосове, і я миттєво зроблю з нього розшифровку.\n"
+        "\n"
+        "Команди:\n"
+        "/me — твій профіль та залишок пам'яті.\n"
+        "\n"
+        "Просто надішли посилання або \"войс\", щоб почати!"
+        )
 
 
 async def _load_users_df(message: types.Message, logger, cfg):
