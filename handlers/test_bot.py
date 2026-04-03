@@ -212,9 +212,9 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['size_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
+        df_display['mb_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 1).astype(str)[:-2]
         if user.level == Level.admin or user.level == Level.vip:
-            await _reply_users_table(df_display, 'size_left', message, logger)
+            await _reply_users_table(df_display, 'mb_left', message, logger)
         else:
             await message.reply('Вибачте, але у вас нема доступу до цієї команди')
     except Exception as e:
