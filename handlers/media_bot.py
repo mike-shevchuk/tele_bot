@@ -59,7 +59,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     ydl_opts = {
         # 'format': f'{format_id}+bestaudio/best[ext=m4a]',  # Combine video format with best audio  
         # #'format': 'bestvideo[ext=mp4]+bestaudio[ext=mp4]/mp4+best[height<=480]', 
-        'format': f'{format_id}+m4a/bestaudio/best',
+        'format': f'{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best',
         'outtmpl': loc_media,
         # 'outtmpl': '%(title)s.%(ext)s'
     }
