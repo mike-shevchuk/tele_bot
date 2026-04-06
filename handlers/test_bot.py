@@ -142,14 +142,40 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         await message.answer(f"помилка {e}")
 
 @router.message(Command("me"))
-async def cmd(message: types.Message, logger, cfg):
+async def cmd_me(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
-    await message.reply(f"Тебе звати: {ut.get_name_from_pydantic(user)} , твоє ID: {user.id}")
+    total_mb = round(user.level.value/(1024**2), 2)
+    used_mb = round(user.use_memory/(1024**2), 2)
+    left_mb = max(0, total_mb-used_mb)
+    await message.reply(
+        f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}\n" 
+        f"Твій рівень: {user.level.name}\n"
+        f"Ти використав {used_mb } з {total_mb} MB\n"
+        f"У тебе лишилось: {left_mb} MB"
+        )
+
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    await message.reply(
+        "Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.\n"
+        "\n"                       
+        "Що я вмію?\n"
+        "\n"                    
+        "Відео: Надішли посилання (YT, TikTok, Insta), обери якість — і отримуй файл у чат.\n"
+        "\n"
+        "Текст: Перешли мені голосове, і я миттєво зроблю з нього розшифровку.\n"
+        "\n"
+        "Команди:\n"
+        "/me — твій профіль та залишок пам'яті.\n"
+        "\n"
+        "Просто надішли посилання або \"войс\", щоб почати!"
+        )
+
 
 async def _load_users_df(message: types.Message, logger, cfg):
     """Load CSV user data. Returns df_display or None if error (reply already sent)."""
