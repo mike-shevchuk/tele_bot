@@ -255,7 +255,7 @@ def ln_2_cr(sent: str) -> str:
     return latin_to_cyrillic(sent)
 
 def is_ltn(sent:str) -> bool:
-    return sent.isascii()
+    return bool(re.search(r'[a-zA-Z]', sent)) and not bool(re.search(r'[а-яА-ЯіІїЇєЄґҐ]', sent))
 
 def get_prj_root():
     root_path = Path.cwd()

@@ -46,6 +46,15 @@ router = Router()
 #     await inline_query.answer(results=[article])
 #     ...
 
+async def check_access(message: types.Message, allowed_levels: list[Level]):
+    user_bot = message.from_user
+    user_df = ut.get_user_by_id(user_bot.id)
+    user = ut.pandas2pydentic(user_df)
+    if user.level not in allowed_levels:
+        await message.reply('Вибачте, але у вас нема доступу до цієї команди')
+        return None
+    return user
+
 @router.inline_query()
 async def inline_query_handler(inline_query: types.InlineQuery, logger):
     query = inline_query.query.strip()
@@ -133,34 +142,39 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         await message.answer(f"помилка {e}")
 
 @router.message(Command("me"))
-async def cmd(message: types.Message):
+async def cmd_me(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
         await message.reply(f"Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
-    await message.reply(f"""Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}. Ти {user.level}.
-У тебе лишилось: {round((user.level.value - user.use_memory)/(1024*1024), 2)} з {round(user.level.value/(1024*1024), 2)} MB""")
+    total_mb = round(user.level.value/(1024**2), 2)
+    used_mb = round(user.use_memory/(1024**2), 2)
+    left_mb = max(0, total_mb-used_mb)
+    await message.reply(
+        f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}\n" 
+        f"Твій рівень: {user.level.name}\n"
+        f"Ти використав {used_mb } з {total_mb} MB\n"
+        f"У тебе лишилось: {left_mb} MB"
+        )
 
 @router.message(Command("help"))
-async def cmd(message: types.Message):
-    user_bot = message.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
-    if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
-    await message.reply("""Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.
-                        
-Що я вмію?
-                        
-Відео: Надішли посилання (YT, TikTok, Insta), обери якість — і отримуй файл у чат.
-
-Текст: Перешли мені голосове, і я миттєво зроблю з нього розшифровку.
-
-Команди:
-/me — твій профіль та залишок пам'яті.
-
-Просто надішли посилання або "войс", щоб почати!""")
+async def cmd_help(message: types.Message):
+    await message.reply(
+        "Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.\n"
+        "\n"                       
+        "Що я вмію?\n"
+        "\n"                    
+        "Відео: Надішли посилання (YT, TikTok, Insta), обери якість — і отримуй файл у чат.\n"
+        "\n"
+        "Текст: Перешли мені голосове, і я миттєво зроблю з нього розшифровку.\n"
+        "\n"
+        "Команди:\n"
+        "/me — твій профіль та залишок пам'яті.\n"
+        "\n"
+        "Просто надішли посилання або \"войс\", щоб почати!"
+        )
 
 
 async def _load_users_df(message: types.Message, logger, cfg):
@@ -187,8 +201,8 @@ async def _load_users_df(message: types.Message, logger, cfg):
 
     df_display = df_user.rename(columns={'id': 'ID', 'username': 'nick', 'full_name': 'name', 'level': 'level_memory'})
     level_to_bytes = lambda x: Level.__members__.get((x).split('.')[-1]).value
-    name4bytes = lambda x: str(Level.__members__.get((x).split('.')[-1])).split('.')[-1]
-    df_display['level'] = df_display['level_memory'].map(name4bytes)
+    get_level_name = lambda x: str(Level.__members__.get((x).split('.')[-1])).split('.')[-1]
+    df_display['level'] = df_display['level_memory'].map(get_level_name)
     df_display['level_memory'] = df_display['level_memory'].map(level_to_bytes)
     df_display[['nick', 'name']] = df_display[['nick', 'name']].fillna('-')
     df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
@@ -206,19 +220,15 @@ async def _reply_users_table(df_display, col: str, message: types.Message, logge
 
 @router.message(Command("chels"))
 async def cmd_show_users_pct(message: types.Message, logger, cfg):
-    user_bot = message.from_user
-    user_df = ut.get_user_by_id(user_bot.id)
-    user = ut.pandas2pydentic(user_df)
+    user = await check_access(message, [Level.admin, Level.vip])
     try:
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
         df_display['size%'] = round(df_display['use_memory'] / df_display['level_memory'] * 100, 1)
-        logger.info(f'>>>>>>>>>>>>{user.level}')
-        if user.level == Level.vip or user.level == Level.admin:
-            await _reply_users_table(df_display, 'size%', message, logger)
-        else:
-            await message.reply('Вибачте, але у вас нема доступу до цієї команди')    
+        if not user:
+            return
+        await _reply_users_table(df_display, 'size%', message, logger)
     except Exception as e:
         logger.exception(f"Помилка при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
@@ -233,9 +243,9 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['size_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 2).astype(str) + " MB"
-        if user.level == 'admin' or user.level == 'vip':
-            await _reply_users_table(df_display, 'size_left', message, logger)
+        df_display['mb_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 1).astype(str)[:-2]
+        if user.level == Level.admin or user.level == Level.vip:
+            await _reply_users_table(df_display, 'mb_left', message, logger)
         else:
             await message.reply('Вибачте, але у вас нема доступу до цієї команди')
     except Exception as e:
