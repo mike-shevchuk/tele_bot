@@ -71,7 +71,7 @@ class Bot_Func:
             await user_msg.reply(f"An error occurred: {e}")
             return
 
-        pattern = glob.escape(loc_video) + '*'
+        pattern = glob.escape(loc_video.replace('.%(ext)s', '')) + '.*'
         loc_match = glob.glob(os.path.join('.', pattern))
 
         loc_video  = loc_match[0]
