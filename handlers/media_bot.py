@@ -24,7 +24,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     environment = jinja2.Environment()
 
     answer_template = environment.from_string(
-        "@{{bot_name}}\n\n{{name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progres_bar_str_value}}\n\n{{youtube_url}}"
+        "@{{bot_name}}\n\n{{name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{youtube_url}}"
     )
     # TODO: make norm translate for cyrilic
     if ut.is_ltn(title):
@@ -46,9 +46,9 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     user = ut.pandas2pydentic(user_df)
 
     total_mem_user_level = user.level.value
-    used_memmory_pre_user = user.use_memory
-    available_memory = total_mem_user_level - used_memmory_pre_user  
-    progres_bar_str_value = ut.progress_bar_str(used_memmory_pre_user, total_mem_user_level)
+    used_memory_per_user = user.use_memory
+    available_memory = total_mem_user_level - used_memory_per_user  
+    progress_bar_str_value = ut.progress_bar_str(used_memory_per_user, total_mem_user_level)
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
@@ -77,7 +77,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     answer_cap = answer_template.render(
         bot_name = cfg.shared_vars.bot_name, 
         avail_mem = ut.h_readable(available_memory-file_size),
-        progres_bar_str_value = progres_bar_str_value,
+        progress_bar_str_value = progress_bar_str_value,
         youtube_url = youtube_url,
         name = title)
     try:
