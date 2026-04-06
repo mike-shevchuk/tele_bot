@@ -98,7 +98,7 @@ async def cmd_numbers(message: types.Message):
     user_data[message.from_user.id] = link  # Save the link to user_data
     res = bot_func.get_keyboard(link)
     if not res:
-        await message.answer('Filed download media formats, please check your link')
+        await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
         logger.warning(f'Failed to download media formats with link {message.text}\n\n\n')
         return
 
@@ -150,7 +150,7 @@ async def handle_inst_tick(message: types.Message, cfg):
 
     res = await bot_func.get_dwn_media(ydl_opts, message)
     if not res:
-        await message.answer('Filed download media please check your link')
+        await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
         logger.warning(f'Failed to download media user {user.id} {ut.get_name_from_pydantic(user)} with link {message.text}\n\n\n')
         return
     loc_video, file_size = res
