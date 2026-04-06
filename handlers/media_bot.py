@@ -53,7 +53,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
     full_name_video = current_date +'__'+ title
-    loc_media = f"media/{user.id}/{full_name_video}" 
+    loc_media = f"media/{user.id}/{full_name_video}.%(ext)s"
 
     # Options for yt-dlp without post-processing
     ydl_opts = {
