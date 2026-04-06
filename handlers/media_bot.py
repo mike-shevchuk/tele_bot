@@ -66,7 +66,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
 
     res = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
     if not res:
-        await bot_msg.answer('Filed download media please check your link')
+        await bot_msg.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
         logger.warning(f'Failed to download media with link {youtube_url}\n\n\n')
         return
     loc_media, file_size = res
