@@ -151,20 +151,16 @@ async def cmd_me(message: types.Message):
     user = ut.pandas2pydentic(df_t)
     total_mb = round(user.level.value/(1024**2), 2)
     used_mb = round(user.use_memory/(1024**2), 2)
-    left_mb = total_mb-used_mb
+    left_mb = max(0, total_mb-used_mb)
     await message.reply(
-        f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}.\n" 
-        f"Твій рівень: {str(user.level).split('.')[-1]}.\n"
-        f"У тебе лишилось: {left_mb} з {total_mb} MB"
+        f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}\n" 
+        f"Твій рівень: {user.level.name}\n"
+        f"Ти використав {used_mb } з {total_mb} MB\n"
+        f"У тебе лишилось: {left_mb} MB"
         )
 
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
-    user_bot = message.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
-    if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
-        return
     await message.reply(
         "Вітаю! Я твій універсальний помічник для завантаження контенту та роботи з медіа.\n"
         "\n"                       
