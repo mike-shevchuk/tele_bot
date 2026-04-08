@@ -120,7 +120,12 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         return
     logger.info(f'User {caller.id} {caller.full_name} run to clear memory')
 
-    target_id = int(message.text.split(' ')[1])
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.reply("Використання: /bugaga <user_id>")
+        return
+
+    target_id = int(parts[1])
     try:
         target_df = ut.get_user_by_id(target_id)
         target_user = ut.pandas2pydentic(target_df)
