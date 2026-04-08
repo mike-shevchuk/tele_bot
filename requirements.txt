@@ -20,3 +20,4 @@ yt-dlp==2025.3.27
 easydict==1.13
 srtools==0.1.13
 Jinja2==3.1.6
+ruff==0.11.6

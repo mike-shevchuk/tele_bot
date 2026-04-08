@@ -1,6 +1,6 @@
 from datetime import datetime
 from aiogram import F, types, Router
-from src.bot import CommonParamYouTube
+from src.bot import CommonParamYouTube, CommonParamInline
 import jinja2
 from src import utils as ut
 
@@ -67,7 +67,7 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         logger.warning(f'Failed to download media with link {youtube_url}\n\n\n')
         return
     loc_media, file_size = res
-    info_wait_button = await bot_msg.reply(f"✅ Download successful!\nSending video", disable_notification=True)
+    info_wait_button = await bot_msg.reply("✅ Download successful!\nSending video", disable_notification=True)
     # loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
     # assert loc_match
     # loc_video  = loc_match[0]
@@ -111,8 +111,83 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
 @router_med.callback_query(F.data.startswith("tick"))
 async def handle_callback_reel(callback_query: types.CallbackQuery, logger, user_data, bot_func):
     cb1 = CommonParamTick.unpack(callback_query.data)
-    title = cb1.title
-    vid_data = cb1.vid_data
-    # logger.trace(f'{cb1=}')
-
     logger.info(f'callback catch {cb1}')
+    await callback_query.answer("This button is outdated, use the new inline search.")
+
+
+@router_med.callback_query(F.data.startswith("idl"))
+async def handle_inline_download(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg):
+    cb = CommonParamInline.unpack(callback_query.data)
+    url = user_data.get(cb.key)
+    logger.info(f'Inline download callback: {cb.key=} {url=}')
+
+    if not url:
+        await callback_query.answer("Link expired. Try searching again.")
+        return
+
+    user_bot = callback_query.from_user
+    df_t = ut.get_user_by_id(user_bot.id)
+    if df_t.empty:
+        await callback_query.answer("You are not registered. Send /start to the bot first.")
+        return
+
+    user = ut.pandas2pydentic(df_t)
+    available_memory = user.level.value - user.use_memory
+    if available_memory < 0:
+        await callback_query.answer("You've exceeded your download limit.")
+        return
+
+    await callback_query.answer()
+
+    bot_msg = callback_query.message
+
+    environment = jinja2.Environment()
+    answer_template = environment.from_string(
+        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
+    )
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    loc_video = f"media/{user.id}/{current_date}"
+    ydl_opts = {
+        'format': 'bestvideo+bestaudio/best',
+        'outtmpl': loc_video,
+    }
+
+    res = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=url)
+    if not res:
+        await bot_msg.answer('Failed to download. Check the link and try again.')
+        logger.warning(f'Failed inline download {url} for user {user.id}')
+        return
+    loc_video, file_size = res
+
+    available_memory -= file_size
+    answer_cap = answer_template.render(
+        bot_name=cfg.shared_vars.bot_name,
+        avail_mem=ut.h_readable(available_memory),
+        progress_bar_str_value=ut.progress_bar_str(user.use_memory, user.level.value),
+        url=url,
+    )
+
+    try:
+        if loc_video.endswith('mp3') or loc_video.endswith('m4a'):
+            await bot_msg.answer_audio(
+                audio=types.FSInputFile(loc_video),
+                caption=f'@{cfg.shared_vars.bot_name}',
+            )
+        else:
+            await bot_msg.answer_video(
+                video=types.FSInputFile(loc_video),
+                caption=answer_cap,
+            )
+    except Exception as e:
+        await bot_msg.reply(f"Error sending video: {e}")
+
+    user.use_memory += file_size
+    ut.update_row(user)
+
+    loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
+    if loc_match:
+        ut.delete_video_file(loc_match[0])
+
+    # Clean up the stored URL
+    user_data.pop(cb.key, None)

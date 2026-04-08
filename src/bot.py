@@ -30,6 +30,10 @@ class CommonParamYouTube(CallbackData, prefix="vid"):
     vid_data: str
 
 
+class CommonParamInline(CallbackData, prefix="idl"):
+    key: str
+
+
 
 
 
@@ -122,7 +126,7 @@ class Bot_Func:
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
-                self.log.info(f'Скачується формати відео  .....')
+                self.log.info('Скачується формати відео  .....')
                 info_dict = ydl.extract_info(video_url, download=False)
                 video_name = info_dict['title']
                 self.log.info(f'Скачали формати відео з назвою {video_name}')
@@ -143,7 +147,7 @@ class Bot_Func:
     def get_keyboard(self, link):
         try:
             yt_info = self._list_formats(link)
-        except Exception as e:
+        except Exception:
             self.log.error('Failed to download youtube format')
             return
 
