@@ -56,38 +56,95 @@ async def check_access(message: types.Message, allowed_levels: list[Level]):
     return user
 
 @router.inline_query()
-async def inline_query_handler(inline_query: types.InlineQuery, logger):
+async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func):
     query = inline_query.query.strip()
     logger.trace(f'Inline Query: {query=}')
 
     articles = []
 
-    if 'tiktok.com' in query:
-        articles.append(
-            InlineQueryResultArticle(
-                id='1',
-                title="TikTok Download",
-                input_message_content=InputTextMessageContent(message_text="TikTok video is downloading..."),
-                description="Download the video from the provided TikTok link.",
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(
-                        text="Download",
-                        callback_data=CommonParamTick(title="TikTok", vid_data='ticktock_test').pack()
-                    )]]
+    if query.startswith('ssoc ') and len(query) > 5:
+        search_text = query[5:].strip()
+        if not search_text:
+            await inline_query.answer(results=[], cache_time=10)
+            return
+
+        logger.info(f'YouTube search via inline: {search_text}')
+        entries = bot_func.search_youtube(search_text, max_results=5)
+
+        for i, entry in enumerate(entries):
+            title = entry.get('title', 'No title')
+            channel = entry.get('channel', entry.get('uploader', 'Unknown'))
+            duration = entry.get('duration')
+            video_url = entry.get('url', '')
+
+            duration_str = ''
+            if duration:
+                mins, secs = divmod(int(duration), 60)
+                duration_str = f'{mins}:{secs:02d}'
+
+            description_parts = []
+            if duration_str:
+                description_parts.append(duration_str)
+            if channel:
+                description_parts.append(channel)
+            description = ' | '.join(description_parts) if description_parts else 'YouTube video'
+
+            articles.append(
+                InlineQueryResultArticle(
+                    id=str(i),
+                    title=title,
+                    input_message_content=InputTextMessageContent(
+                        message_text=video_url,
+                    ),
+                    description=description,
                 )
             )
-        )
-    else:
+
+        if not articles:
+            articles.append(
+                InlineQueryResultArticle(
+                    id='no_results',
+                    title='No results found',
+                    input_message_content=InputTextMessageContent(
+                        message_text='No YouTube results found.',
+                    ),
+                    description=f'No videos found for "{search_text}"',
+                )
+            )
+
+    elif any(domain in query for domain in ['tiktok.com', 'instagram.com', 'youtube.com', 'youtu.be']):
+        link = query.strip()
+        if 'tiktok.com' in link:
+            label = 'TikTok'
+        elif 'instagram.com' in link:
+            label = 'Instagram'
+        else:
+            label = 'YouTube'
+
         articles.append(
             InlineQueryResultArticle(
-                id='2',
-                title="Invalid Link",
-                input_message_content=InputTextMessageContent(message_text="This link is not supported."),
-                description="The provided link is not supported."
+                id='dl_social',
+                title=f'Download {label} video',
+                input_message_content=InputTextMessageContent(
+                    message_text=link,
+                ),
+                description=f'Download video from {label}',
             )
         )
 
-    await inline_query.answer(results=articles)
+    else:
+        articles.append(
+            InlineQueryResultArticle(
+                id='help',
+                title='How to use',
+                input_message_content=InputTextMessageContent(
+                    message_text='Use @bot ssoc <query> to search YouTube, or paste a TikTok/Instagram/YouTube link.',
+                ),
+                description='ssoc <query> | or paste a social link',
+            )
+        )
+
+    await inline_query.answer(results=articles, cache_time=10)
 
 
 @router.message(Command("test0"))
