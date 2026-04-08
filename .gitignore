@@ -170,3 +170,13 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .python-version
+
+
+
+media
+assets
+
+*_test*.py
+**/*test*.py
+data/reg_user.csv
+.vscode
