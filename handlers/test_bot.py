@@ -1,15 +1,12 @@
-from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
-from uuid import uuid4
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
-from aiogram.fsm.storage.memory import MemoryStorage
-from src.bot import CommonParamYouTube
-from src.MiddleWare import SharedContextMiddleware
+from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
@@ -56,8 +53,9 @@ async def check_access(message: types.Message, allowed_levels: list[Level]):
     return user
 
 @router.inline_query()
-async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func):
+async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func, user_data):
     query = inline_query.query.strip()
+    user_id = inline_query.from_user.id
     logger.trace(f'Inline Query: {query=}')
 
     articles = []
@@ -77,6 +75,9 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             duration = entry.get('duration')
             video_url = entry.get('url', '')
 
+            key = f"inl_{user_id}_{i}"
+            user_data[key] = video_url
+
             duration_str = ''
             if duration:
                 mins, secs = divmod(int(duration), 60)
@@ -89,14 +90,21 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 description_parts.append(channel)
             description = ' | '.join(description_parts) if description_parts else 'YouTube video'
 
+            cb = CommonParamInline(key=key)
             articles.append(
                 InlineQueryResultArticle(
                     id=str(i),
                     title=title,
                     input_message_content=InputTextMessageContent(
-                        message_text=video_url,
+                        message_text=f"{title}\n{video_url}",
                     ),
                     description=description,
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[[InlineKeyboardButton(
+                            text="Download",
+                            callback_data=cb.pack(),
+                        )]]
+                    ),
                 )
             )
 
@@ -121,14 +129,24 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
         else:
             label = 'YouTube'
 
+        key = f"inl_{user_id}_social"
+        user_data[key] = link
+        cb = CommonParamInline(key=key)
+
         articles.append(
             InlineQueryResultArticle(
                 id='dl_social',
                 title=f'Download {label} video',
                 input_message_content=InputTextMessageContent(
-                    message_text=link,
+                    message_text=f"Downloading {label} video...\n{link}",
                 ),
                 description=f'Download video from {label}',
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(
+                        text="Download",
+                        callback_data=cb.pack(),
+                    )]]
+                ),
             )
         )
 
@@ -173,7 +191,7 @@ async def cmd_test2(message: types.Message, logger):
 async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
     caller = message.from_user
     if ut.get_user_by_id(caller.id).empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     logger.info(f'User {caller.id} {caller.full_name} run to clear memory')
 
@@ -198,7 +216,7 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         logger.info(f'Notification sent to {target_id}')
     except IndexError:
         logger.info(f'{target_id} dont reg')
-        await message.answer(f"Ти не зареганий натисни /start")
+        await message.answer("Ти не зареганий натисни /start")
     except Exception as e:
         logger.exception(f'{target_id} dont reg')
         await message.answer(f"помилка {e}")
@@ -208,7 +226,7 @@ async def cmd_me(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
     total_mb = round(user.level.value/(1024**2), 2)
