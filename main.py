@@ -64,7 +64,7 @@ async def start_user(message:types.Message):
 
 
 @dp.message(lambda msg: msg.text and any(link in msg.text for link in ['youtu.be', 'youtube.com']))
-async def cmd_numbers(message: types.Message):
+async def cmd_numbers(message: types.Message, cfg):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
     link = link.split('&list')[0]
@@ -77,12 +77,59 @@ async def cmd_numbers(message: types.Message):
     user = ut.pandas2pydentic(df_t)
     available_memory = user.level.value - user.use_memory
     logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(available_memory)=}')
-    
+
     if available_memory < 0:
         await message.reply(f"Ви використали свій ліміт({ut.h_readable(user.level.value)})"+
                              f" на цей місяць, підніміть свій статус")
         return
-    
+
+    # If the message came via inline bot, auto-download best quality
+    if message.via_bot:
+        logger.info(f'Inline YouTube download for {user.id}: {link}')
+        environment = jinja2.Environment()
+        answer_template = environment.from_string(
+            "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
+        )
+
+        current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        loc_video = f"media/{user.id}/{current_date}"
+        ydl_opts = {
+            'format': 'bestvideo+bestaudio/best',
+            'outtmpl': loc_video,
+        }
+
+        res = await bot_func.get_dwn_media(ydl_opts, message, youtubeLink=link)
+        if not res:
+            await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
+            logger.warning(f'Failed to download inline YouTube video {link}\n\n\n')
+            return
+        loc_video, file_size = res
+
+        available_memory -= file_size
+        total_mem_user_level = user.level.value
+        used_memory_per_user = user.use_memory
+
+        answer_cap = answer_template.render(
+            bot_name=cfg.shared_vars.bot_name,
+            avail_mem=ut.h_readable(available_memory),
+            progress_bar_str_value=ut.progress_bar_str(used_memory_per_user, total_mem_user_level),
+            url=link,
+        )
+
+        try:
+            await message.answer_video(
+                video=types.FSInputFile(loc_video), caption=answer_cap
+            )
+        except Exception as e:
+            await message.reply(f"An error occurred while sending the video: {e}")
+        user.use_memory += file_size
+        loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
+        assert loc_match
+        loc_video = loc_match[0]
+        ut.update_row(user)
+        ut.delete_video_file(loc_video)
+        return
+
     wait_bot_msg = await message.reply(f"Твоя лінка на youtube повідомлення опрацьовується!\
                                         У тебе лишилося {ut.h_readable(available_memory)}", disable_notification=True)
     logger.success(f'Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}')
@@ -93,12 +140,12 @@ async def cmd_numbers(message: types.Message):
         logger.warning(f'Failed to download media formats with link {message.text}\n\n\n')
         return
 
-        
+
     yt_info, all_butons = res
     video_name = yt_info['title']
     id_video = yt_info['id']
     await message.reply(
-                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" + 
+                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" +
                         f"Vidoe --> {video_name}\nId --> {id_video} \n" +
                         f"У тебе лишилося {ut.h_readable(available_memory)}",
                         reply_markup=all_butons)
