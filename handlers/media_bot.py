@@ -138,9 +138,19 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
         await callback_query.answer("You've exceeded your download limit.")
         return
 
-    await callback_query.answer()
+    await callback_query.answer("Downloading...")
 
-    # Inline callbacks have message=None, so send status to user's DM
+    # Update the inline message to show download status
+    inline_msg_id = callback_query.inline_message_id
+    if inline_msg_id:
+        try:
+            await bot.edit_message_text(
+                "Downloading...",
+                inline_message_id=inline_msg_id,
+            )
+        except Exception:
+            pass
+
     status_msg = await bot.send_message(user_id, "Start downloading ...")
 
     environment = jinja2.Environment()
@@ -158,6 +168,14 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
     if not res:
         await bot.send_message(user_id, 'Failed to download. Check the link and try again.')
+        if inline_msg_id:
+            try:
+                await bot.edit_message_text(
+                    "Download failed",
+                    inline_message_id=inline_msg_id,
+                )
+            except Exception:
+                pass
         logger.warning(f'Failed inline download {url} for user {user_id}')
         return
     loc_video, file_size = res
@@ -185,6 +203,16 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
             )
     except Exception as e:
         await bot.send_message(user_id, f"Error sending video: {e}")
+
+    # Update inline message to show completion
+    if inline_msg_id:
+        try:
+            await bot.edit_message_text(
+                "Video sent to your DM",
+                inline_message_id=inline_msg_id,
+            )
+        except Exception:
+            pass
 
     user.use_memory += file_size
     ut.update_row(user)
