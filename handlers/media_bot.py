@@ -1,5 +1,5 @@
 from datetime import datetime
-from aiogram import F, types, Router
+from aiogram import F, Bot, types, Router
 from src.bot import CommonParamYouTube, CommonParamInline
 import jinja2
 from src import utils as ut
@@ -116,7 +116,7 @@ async def handle_callback_reel(callback_query: types.CallbackQuery, logger, user
 
 
 @router_med.callback_query(F.data.startswith("idl"))
-async def handle_inline_download(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg):
+async def handle_inline_download(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg, bot: Bot):
     cb = CommonParamInline.unpack(callback_query.data)
     url = user_data.get(cb.key)
     logger.info(f'Inline download callback: {cb.key=} {url=}')
@@ -126,7 +126,8 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
         return
 
     user_bot = callback_query.from_user
-    df_t = ut.get_user_by_id(user_bot.id)
+    user_id = user_bot.id
+    df_t = ut.get_user_by_id(user_id)
     if df_t.empty:
         await callback_query.answer("You are not registered. Send /start to the bot first.")
         return
@@ -139,7 +140,8 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
 
     await callback_query.answer()
 
-    bot_msg = callback_query.message
+    # Inline callbacks have message=None, so send status to user's DM
+    status_msg = await bot.send_message(user_id, "Start downloading ...")
 
     environment = jinja2.Environment()
     answer_template = environment.from_string(
@@ -147,16 +149,16 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     )
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_video = f"media/{user.id}/{current_date}"
+    loc_video = f"media/{user_id}/{current_date}"
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': loc_video,
     }
 
-    res = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=url)
+    res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
     if not res:
-        await bot_msg.answer('Failed to download. Check the link and try again.')
-        logger.warning(f'Failed inline download {url} for user {user.id}')
+        await bot.send_message(user_id, 'Failed to download. Check the link and try again.')
+        logger.warning(f'Failed inline download {url} for user {user_id}')
         return
     loc_video, file_size = res
 
@@ -170,17 +172,19 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
 
     try:
         if loc_video.endswith('mp3') or loc_video.endswith('m4a'):
-            await bot_msg.answer_audio(
+            await bot.send_audio(
+                chat_id=user_id,
                 audio=types.FSInputFile(loc_video),
                 caption=f'@{cfg.shared_vars.bot_name}',
             )
         else:
-            await bot_msg.answer_video(
+            await bot.send_video(
+                chat_id=user_id,
                 video=types.FSInputFile(loc_video),
                 caption=answer_cap,
             )
     except Exception as e:
-        await bot_msg.reply(f"Error sending video: {e}")
+        await bot.send_message(user_id, f"Error sending video: {e}")
 
     user.use_memory += file_size
     ut.update_row(user)
@@ -189,5 +193,4 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     if loc_match:
         ut.delete_video_file(loc_match[0])
 
-    # Clean up the stored URL
     user_data.pop(cb.key, None)
