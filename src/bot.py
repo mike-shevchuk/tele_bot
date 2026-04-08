@@ -42,6 +42,23 @@ class Bot_Func:
         self.log = log
         self.root_prj = root_prj
 
+    def search_youtube(self, query, max_results=5):
+        """Search YouTube using yt-dlp and return up to max_results entries."""
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,
+            'force_generic_extractor': False,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(
+                    f"ytsearch{max_results}:{query}", download=False
+                )
+                return result.get('entries', [])
+        except Exception as e:
+            self.log.error(f"YouTube search error: {e}")
+            return []
+
 
 
     # TODO: remove from main
