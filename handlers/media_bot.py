@@ -205,31 +205,34 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
             )
 
         # Replace the inline message with the actual video/audio
+        logger.info(f'inline_msg_id={inline_msg_id}, has_video={bool(dm_msg.video)}, '
+                     f'has_document={bool(dm_msg.document)}, has_audio={bool(dm_msg.audio)}')
         if inline_msg_id and dm_msg:
-            try:
-                if is_audio and dm_msg.audio:
-                    media = types.InputMediaAudio(
-                        media=dm_msg.audio.file_id,
-                        caption=f'@{cfg.shared_vars.bot_name}',
-                    )
-                elif dm_msg.video:
-                    media = types.InputMediaVideo(
-                        media=dm_msg.video.file_id,
-                        caption=answer_cap,
-                    )
-                else:
-                    media = None
+            file_id = None
+            if is_audio and dm_msg.audio:
+                file_id = dm_msg.audio.file_id
+                media = types.InputMediaAudio(media=file_id, caption=f'@{cfg.shared_vars.bot_name}')
+            elif dm_msg.video:
+                file_id = dm_msg.video.file_id
+                media = types.InputMediaVideo(media=file_id, caption=answer_cap)
+            elif dm_msg.document:
+                file_id = dm_msg.document.file_id
+                media = types.InputMediaDocument(media=file_id, caption=answer_cap)
+            else:
+                media = None
 
-                if media:
+            logger.info(f'edit_message_media: file_id={bool(file_id)}, media_type={type(media).__name__ if media else None}')
+            if media:
+                try:
                     await bot.edit_message_media(
                         media=media,
                         inline_message_id=inline_msg_id,
                     )
-                    # Delete the DM copy since video is now in the chat
                     await dm_msg.delete()
-            except Exception as e:
-                logger.warning(f'Could not edit inline message with media: {e}')
-                # DM copy stays as fallback
+                    logger.info('Inline message replaced with video successfully')
+                except Exception as e:
+                    logger.error(f'edit_message_media failed: {e}')
+                    # DM copy stays as fallback
 
     except Exception as e:
         await bot.send_message(user_id, f"Error sending video: {e}")
