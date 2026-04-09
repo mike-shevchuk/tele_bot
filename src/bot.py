@@ -95,8 +95,14 @@ class Bot_Func:
             strt_dwn_msg = await user_msg.answer("Downloading... 0%\n⬜⬜⬜⬜⬜⬜⬜⬜")
             self.log.debug(f'Start download video {loc_video}')
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             last_update = [0.0]
+
+            async def _edit_progress(text):
+                try:
+                    await strt_dwn_msg.edit_text(text)
+                except Exception:
+                    pass
 
             def progress_hook(d):
                 if d['status'] != 'downloading':
@@ -118,11 +124,10 @@ class Bot_Func:
                 speed_str = f" | {speed / 1024 / 1024:.1f} MB/s" if speed else ""
                 text = f"Downloading... {pct:.0f}%\n{bar}{speed_str}"
 
-                fut = asyncio.run_coroutine_threadsafe(
-                    strt_dwn_msg.edit_text(text), loop
-                )
                 try:
-                    fut.result(timeout=5)
+                    asyncio.run_coroutine_threadsafe(
+                        _edit_progress(text), loop
+                    )
                 except Exception:
                     pass
 

@@ -2,7 +2,9 @@ from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
+import asyncio
 import html
+import time
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
@@ -10,6 +12,9 @@ from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
+
+# Debounce: store last query time per user
+_last_query_time: dict[int, float] = {}
 
 
 
@@ -57,6 +62,14 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
     query = inline_query.query.strip()
     user_id = inline_query.from_user.id
     logger.trace(f'Inline Query: {query=}')
+
+    # Debounce: wait 1s, skip if user typed more
+    if query:
+        now = time.time()
+        _last_query_time[user_id] = now
+        await asyncio.sleep(1)
+        if _last_query_time.get(user_id) != now:
+            return  # User kept typing, skip this query
 
     articles = []
 
