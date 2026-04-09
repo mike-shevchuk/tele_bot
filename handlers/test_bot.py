@@ -86,9 +86,21 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 mins, secs = divmod(int(duration), 60)
                 duration_str = f'{mins}:{secs:02d}'
 
+            view_count = entry.get('view_count')
+            views_str = ''
+            if view_count:
+                if view_count >= 1_000_000:
+                    views_str = f'{view_count / 1_000_000:.1f}M views'
+                elif view_count >= 1_000:
+                    views_str = f'{view_count / 1_000:.1f}K views'
+                else:
+                    views_str = f'{view_count} views'
+
             description_parts = []
             if duration_str:
                 description_parts.append(duration_str)
+            if views_str:
+                description_parts.append(views_str)
             if channel:
                 description_parts.append(channel)
             description = ' | '.join(description_parts) if description_parts else 'YouTube video'
