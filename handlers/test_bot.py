@@ -126,7 +126,7 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 thumbnail = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else ''
 
                 key = f"inl_{user_id}_{i}"
-                user_data[key] = {'url': video_url, 'mode': mode}
+                user_data[key] = {'url': video_url, 'mode': mode, 'title': title}
 
                 duration_str = ''
                 if duration:
