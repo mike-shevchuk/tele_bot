@@ -124,9 +124,13 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             label = 'YouTube'
 
         # Extract direct video URL so it sends directly in chat (like @LyBot)
+        logger.info(f'Extracting video info for {label}: {link}')
         info = bot_func.extract_video_info(link)
+        logger.info(f'Extraction result: url={bool(info and info.get("url"))}, title={info.get("title") if info else None}')
+
         if info and info['url']:
             thumb = info['thumbnail'] or 'https://placehold.co/320x180.png'
+            logger.info(f'Using InlineQueryResultVideo: url_len={len(info["url"])}, thumb={thumb[:50]}')
             articles.append(
                 InlineQueryResultVideo(
                     id='dl_social',
@@ -139,7 +143,7 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 )
             )
         else:
-            # Fallback to callback button approach if extraction fails
+            logger.warning(f'Extraction failed for {link}, using callback fallback')
             key = f"inl_{user_id}_social"
             user_data[key] = link
             cb = CommonParamInline(key=key)

@@ -46,14 +46,18 @@ class Bot_Func:
     def extract_video_info(self, url):
         """Extract direct video URL and metadata without downloading."""
         ydl_opts = {
-            'quiet': True,
-            'format': 'best',  # single combined stream for direct URL
+            'quiet': False,
+            'format': 'best',
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
+                direct_url = info.get('url', '')
+                self.log.info(f'extract_video_info: title={info.get("title")}, '
+                              f'has_url={bool(direct_url)}, url_len={len(direct_url)}, '
+                              f'ext={info.get("ext")}, format={info.get("format")}')
                 return {
-                    'url': info.get('url', ''),
+                    'url': direct_url,
                     'thumbnail': info.get('thumbnail', ''),
                     'title': info.get('title', 'Video'),
                     'duration': info.get('duration', 0),
