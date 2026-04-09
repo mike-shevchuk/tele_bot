@@ -63,12 +63,11 @@ class Bot_Func:
             self.log.error(f"Video info extraction error: {e}")
             return None
 
-    def search_youtube(self, query, max_results=5):
-        """Search YouTube using yt-dlp and return up to max_results entries."""
+    def search_youtube(self, query, max_results=3):
+        """Search YouTube and return entries with direct video URLs."""
         ydl_opts = {
             'quiet': True,
-            'extract_flat': True,
-            'force_generic_extractor': False,
+            'format': 'best',
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
