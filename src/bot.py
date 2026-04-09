@@ -43,6 +43,26 @@ class Bot_Func:
         self.log = log
         self.root_prj = root_prj
 
+    def extract_video_info(self, url):
+        """Extract direct video URL and metadata without downloading."""
+        ydl_opts = {
+            'quiet': True,
+            'format': 'best',  # single combined stream for direct URL
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return {
+                    'url': info.get('url', ''),
+                    'thumbnail': info.get('thumbnail', ''),
+                    'title': info.get('title', 'Video'),
+                    'duration': info.get('duration', 0),
+                    'filesize': info.get('filesize') or info.get('filesize_approx') or 0,
+                }
+        except Exception as e:
+            self.log.error(f"Video info extraction error: {e}")
+            return None
+
     def search_youtube(self, query, max_results=5):
         """Search YouTube using yt-dlp and return up to max_results entries."""
         ydl_opts = {

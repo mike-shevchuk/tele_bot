@@ -1,7 +1,7 @@
 from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineQueryResultArticle, InlineQueryResultVideo, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
@@ -129,26 +129,42 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
         else:
             label = 'YouTube'
 
-        key = f"inl_{user_id}_social"
-        user_data[key] = link
-        cb = CommonParamInline(key=key)
-
-        articles.append(
-            InlineQueryResultArticle(
-                id='dl_social',
-                title=f'Download {label} video',
-                input_message_content=InputTextMessageContent(
-                    message_text=f"Downloading {label} video...\n{link}",
-                ),
-                description=f'Download video from {label}',
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(
-                        text="Download",
-                        callback_data=cb.pack(),
-                    )]]
-                ),
+        # Extract direct video URL so it sends directly in chat (like @LyBot)
+        info = bot_func.extract_video_info(link)
+        if info and info['url']:
+            thumb = info['thumbnail'] or 'https://placehold.co/320x180.png'
+            articles.append(
+                InlineQueryResultVideo(
+                    id='dl_social',
+                    video_url=info['url'],
+                    mime_type='video/mp4',
+                    thumbnail_url=thumb,
+                    title=info['title'],
+                    description=f'{label} video',
+                    video_duration=int(info['duration']) if info['duration'] else None,
+                )
             )
-        )
+        else:
+            # Fallback to callback button approach if extraction fails
+            key = f"inl_{user_id}_social"
+            user_data[key] = link
+            cb = CommonParamInline(key=key)
+            articles.append(
+                InlineQueryResultArticle(
+                    id='dl_social',
+                    title=f'Download {label} video',
+                    input_message_content=InputTextMessageContent(
+                        message_text=f"Downloading {label} video...\n{link}",
+                    ),
+                    description=f'Download video from {label}',
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[[InlineKeyboardButton(
+                            text="Download",
+                            callback_data=cb.pack(),
+                        )]]
+                    ),
+                )
+            )
 
     else:
         articles.append(
