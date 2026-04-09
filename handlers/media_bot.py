@@ -129,9 +129,11 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     if isinstance(data, str):
         url = data
         mode = 'social'
+        media_title = ''
     else:
         url = data['url']
         mode = data.get('mode', 'social')
+        media_title = data.get('title', '')
 
     user_bot = callback_query.from_user
     user_id = user_bot.id
@@ -171,7 +173,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     if mode == 'audio':
         ydl_opts = {
             'format': 'bestaudio/best',
-            'outtmpl': f"media/{user_id}/%(title)s",
+            'outtmpl': loc_media,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -221,6 +223,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
             dm_msg = await bot.send_audio(
                 chat_id=user_id,
                 audio=types.FSInputFile(loc_media),
+                title=media_title or None,
                 caption=f'@{cfg.shared_vars.bot_name}',
             )
         else:
