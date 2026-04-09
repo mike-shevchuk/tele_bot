@@ -118,12 +118,20 @@ async def handle_callback_reel(callback_query: types.CallbackQuery, logger, user
 @router_med.callback_query(F.data.startswith("idl"))
 async def handle_inline_download(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg, bot: Bot):
     cb = CommonParamInline.unpack(callback_query.data)
-    url = user_data.get(cb.key)
-    logger.info(f'Inline download callback: {cb.key=} {url=}')
+    data = user_data.get(cb.key)
+    logger.info(f'Inline download callback: {cb.key=} {data=}')
 
-    if not url:
+    if not data:
         await callback_query.answer("Link expired. Try searching again.")
         return
+
+    # Support both old format (string) and new format (dict)
+    if isinstance(data, str):
+        url = data
+        mode = 'social'
+    else:
+        url = data['url']
+        mode = data.get('mode', 'social')
 
     user_bot = callback_query.from_user
     user_id = user_bot.id
@@ -158,11 +166,30 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     )
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_video = f"media/{user_id}/{current_date}"
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': loc_video,
-    }
+    loc_media = f"media/{user_id}/{current_date}"
+
+    if mode == 'audio':
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': loc_media,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+    elif mode == 'video':
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'outtmpl': loc_media,
+            'merge_output_format': 'mp4',
+        }
+    else:  # social
+        ydl_opts = {
+            'format': 'bestvideo+bestaudio/best',
+            'outtmpl': loc_media,
+            'merge_output_format': 'mp4',
+        }
 
     res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
     if not res:
@@ -177,7 +204,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
                 pass
         logger.warning(f'Failed inline download {url} for user {user_id}')
         return
-    loc_video, file_size = res
+    loc_media, file_size = res
 
     available_memory -= file_size
     answer_cap = answer_template.render(
@@ -188,18 +215,18 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     )
 
     try:
-        is_audio = loc_video.endswith('mp3') or loc_video.endswith('m4a')
+        is_audio = loc_media.endswith('mp3') or loc_media.endswith('m4a')
 
         if is_audio:
             dm_msg = await bot.send_audio(
                 chat_id=user_id,
-                audio=types.FSInputFile(loc_video),
+                audio=types.FSInputFile(loc_media),
                 caption=f'@{cfg.shared_vars.bot_name}',
             )
         else:
             dm_msg = await bot.send_video(
                 chat_id=user_id,
-                video=types.FSInputFile(loc_video),
+                video=types.FSInputFile(loc_media),
                 caption=answer_cap,
             )
 
@@ -228,18 +255,17 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
                         inline_message_id=inline_msg_id,
                     )
                     await dm_msg.delete()
-                    logger.info('Inline message replaced with video successfully')
+                    logger.info('Inline message replaced with media successfully')
                 except Exception as e:
                     logger.error(f'edit_message_media failed: {e}')
-                    # DM copy stays as fallback
 
     except Exception as e:
-        await bot.send_message(user_id, f"Error sending video: {e}")
+        await bot.send_message(user_id, f"Error sending media: {e}")
 
     user.use_memory += file_size
     ut.update_row(user)
 
-    loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
+    loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
     if loc_match:
         ut.delete_video_file(loc_match[0])
 

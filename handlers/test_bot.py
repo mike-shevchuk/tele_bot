@@ -60,97 +60,15 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
 
     articles = []
 
-    if query.startswith('ssoc ') and len(query) > 5:
-        search_text = query[5:].strip()
-        if not search_text:
-            await inline_query.answer(results=[], cache_time=10)
-            return
-
-        logger.info(f'YouTube search via inline: {search_text}')
-        entries = bot_func.search_youtube(search_text, max_results=3)
-
-        for i, entry in enumerate(entries):
-            title = entry.get('title', 'No title')
-            channel = entry.get('channel', entry.get('uploader', 'Unknown'))
-            duration = entry.get('duration')
-            video_url = entry.get('url') or entry.get('webpage_url', '')
-            # Flat extraction: build thumbnail from video ID
-            video_id = entry.get('id', '')
-            thumbnail = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else ''
-
-            key = f"inl_{user_id}_{i}"
-            user_data[key] = video_url
-
-            duration_str = ''
-            if duration:
-                mins, secs = divmod(int(duration), 60)
-                duration_str = f'{mins}:{secs:02d}'
-
-            view_count = entry.get('view_count')
-            views_str = ''
-            if view_count:
-                if view_count >= 1_000_000:
-                    views_str = f'{view_count / 1_000_000:.1f}M views'
-                elif view_count >= 1_000:
-                    views_str = f'{view_count / 1_000:.1f}K views'
-                else:
-                    views_str = f'{view_count} views'
-
-            description_parts = []
-            if duration_str:
-                description_parts.append(duration_str)
-            if views_str:
-                description_parts.append(views_str)
-            if channel:
-                description_parts.append(channel)
-            description = ' | '.join(description_parts) if description_parts else 'YouTube video'
-
-            thumb = thumbnail or 'https://placehold.co/320x180.png'
-            cb = CommonParamInline(key=key)
-            articles.append(
-                InlineQueryResultArticle(
-                    id=str(i),
-                    title=title,
-                    input_message_content=InputTextMessageContent(
-                        message_text=f"{title}\n{video_url}",
-                    ),
-                    description=description,
-                    thumbnail_url=thumb,
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[[InlineKeyboardButton(
-                            text="Download",
-                            callback_data=cb.pack(),
-                        )]]
-                    ),
-                )
-            )
-
-        if not articles:
-            articles.append(
-                InlineQueryResultArticle(
-                    id='no_results',
-                    title='No results found',
-                    input_message_content=InputTextMessageContent(
-                        message_text='No YouTube results found.',
-                    ),
-                    description=f'No videos found for "{search_text}"',
-                )
-            )
-
-    elif any(domain in query for domain in ['tiktok.com', 'instagram.com', 'youtube.com', 'youtu.be']):
+    # Detect social media links first
+    if any(domain in query for domain in ['tiktok.com', 'instagram.com']):
         link = query.strip()
-        if 'tiktok.com' in link:
-            label = 'TikTok'
-        elif 'instagram.com' in link:
-            label = 'Instagram'
-        else:
-            label = 'YouTube'
+        label = 'TikTok' if 'tiktok.com' in link else 'Instagram'
 
         key = f"inl_{user_id}_social"
-        user_data[key] = link
+        user_data[key] = {'url': link, 'mode': 'social'}
         cb = CommonParamInline(key=key)
 
-        # Extract metadata for preview thumbnail
         info = bot_func.extract_video_info(link)
         if info:
             preview_title = info.get('title') or f'Download {label} video'
@@ -184,15 +102,97 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             )
         )
 
+    elif query.strip():
+        # "v query" → YouTube video search, "query" → YouTube audio/MP3
+        if query.startswith('v ') and len(query) > 2:
+            search_text = query[2:].strip()
+            mode = 'video'
+            btn_label = 'Download MP4'
+        else:
+            search_text = query.strip()
+            mode = 'audio'
+            btn_label = 'Download MP3'
+
+        if search_text:
+            logger.info(f'YouTube {mode} search: {search_text}')
+            entries = bot_func.search_youtube(search_text, max_results=5)
+
+            for i, entry in enumerate(entries):
+                title = entry.get('title', 'No title')
+                channel = entry.get('channel', entry.get('uploader', 'Unknown'))
+                duration = entry.get('duration')
+                video_url = entry.get('url') or entry.get('webpage_url', '')
+                video_id = entry.get('id', '')
+                thumbnail = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else ''
+
+                key = f"inl_{user_id}_{i}"
+                user_data[key] = {'url': video_url, 'mode': mode}
+
+                duration_str = ''
+                if duration:
+                    mins, secs = divmod(int(duration), 60)
+                    duration_str = f'{mins}:{secs:02d}'
+
+                view_count = entry.get('view_count')
+                views_str = ''
+                if view_count:
+                    if view_count >= 1_000_000:
+                        views_str = f'{view_count / 1_000_000:.1f}M views'
+                    elif view_count >= 1_000:
+                        views_str = f'{view_count / 1_000:.1f}K views'
+                    else:
+                        views_str = f'{view_count} views'
+
+                description_parts = []
+                if duration_str:
+                    description_parts.append(duration_str)
+                if views_str:
+                    description_parts.append(views_str)
+                if channel:
+                    description_parts.append(channel)
+                description = ' | '.join(description_parts) if description_parts else 'YouTube'
+
+                thumb = thumbnail or 'https://placehold.co/320x180.png'
+                cb = CommonParamInline(key=key)
+                articles.append(
+                    InlineQueryResultArticle(
+                        id=str(i),
+                        title=title,
+                        input_message_content=InputTextMessageContent(
+                            message_text=f"{title}\n{video_url}",
+                        ),
+                        description=description,
+                        thumbnail_url=thumb,
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[[InlineKeyboardButton(
+                                text=btn_label,
+                                callback_data=cb.pack(),
+                            )]]
+                        ),
+                    )
+                )
+
+            if not articles:
+                articles.append(
+                    InlineQueryResultArticle(
+                        id='no_results',
+                        title='No results found',
+                        input_message_content=InputTextMessageContent(
+                            message_text='No YouTube results found.',
+                        ),
+                        description=f'No videos found for "{search_text}"',
+                    )
+                )
+
     else:
         articles.append(
             InlineQueryResultArticle(
                 id='help',
                 title='How to use',
                 input_message_content=InputTextMessageContent(
-                    message_text='Use @bot ssoc <query> to search YouTube, or paste a TikTok/Instagram/YouTube link.',
+                    message_text='Type a search query for MP3, "v query" for video, or paste a TikTok/Instagram link.',
                 ),
-                description='ssoc <query> | or paste a social link',
+                description='<query> = MP3 | v <query> = video | TikTok/Insta link',
             )
         )
 
