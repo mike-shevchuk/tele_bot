@@ -46,7 +46,7 @@ class Bot_Func:
     def extract_video_info(self, url):
         """Extract direct video URL and metadata without downloading."""
         ydl_opts = {
-            'quiet': False,
+            'quiet': True,
             'format': 'best',
         }
         try:
@@ -68,10 +68,10 @@ class Bot_Func:
             return None
 
     def search_youtube(self, query, max_results=3):
-        """Search YouTube and return entries with direct video URLs."""
+        """Search YouTube and return entries with video metadata."""
         ydl_opts = {
             'quiet': True,
-            'format': 'best',
+            'extract_flat': True,
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

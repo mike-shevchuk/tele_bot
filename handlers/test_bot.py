@@ -1,7 +1,7 @@
 from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from aiogram.types import InlineQueryResultArticle, InlineQueryResultVideo, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
@@ -73,8 +73,11 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             title = entry.get('title', 'No title')
             channel = entry.get('channel', entry.get('uploader', 'Unknown'))
             duration = entry.get('duration')
-            direct_url = entry.get('url', '')
+            video_url = entry.get('webpage_url') or entry.get('original_url', '')
             thumbnail = entry.get('thumbnail', '')
+
+            key = f"inl_{user_id}_{i}"
+            user_data[key] = video_url
 
             duration_str = ''
             if duration:
@@ -88,19 +91,25 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 description_parts.append(channel)
             description = ' | '.join(description_parts) if description_parts else 'YouTube video'
 
-            if direct_url:
-                thumb = thumbnail or 'https://placehold.co/320x180.png'
-                articles.append(
-                    InlineQueryResultVideo(
-                        id=str(i),
-                        video_url=direct_url,
-                        mime_type='video/mp4',
-                        thumbnail_url=thumb,
-                        title=title,
-                        description=description,
-                        video_duration=int(duration) if duration else None,
-                    )
+            thumb = thumbnail or 'https://placehold.co/320x180.png'
+            cb = CommonParamInline(key=key)
+            articles.append(
+                InlineQueryResultArticle(
+                    id=str(i),
+                    title=title,
+                    input_message_content=InputTextMessageContent(
+                        message_text=f"{title}\n{video_url}",
+                    ),
+                    description=description,
+                    thumbnail_url=thumb,
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[[InlineKeyboardButton(
+                            text="Download",
+                            callback_data=cb.pack(),
+                        )]]
+                    ),
                 )
+            )
 
         if not articles:
             articles.append(
@@ -123,46 +132,25 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
         else:
             label = 'YouTube'
 
-        # Extract direct video URL so it sends directly in chat (like @LyBot)
-        logger.info(f'Extracting video info for {label}: {link}')
-        info = bot_func.extract_video_info(link)
-        logger.info(f'Extraction result: url={bool(info and info.get("url"))}, title={info.get("title") if info else None}')
-
-        if info and info['url']:
-            thumb = info['thumbnail'] or 'https://placehold.co/320x180.png'
-            logger.info(f'Using InlineQueryResultVideo: url_len={len(info["url"])}, thumb={thumb[:50]}')
-            articles.append(
-                InlineQueryResultVideo(
-                    id='dl_social',
-                    video_url=info['url'],
-                    mime_type='video/mp4',
-                    thumbnail_url=thumb,
-                    title=info['title'],
-                    description=f'{label} video',
-                    video_duration=int(info['duration']) if info['duration'] else None,
-                )
+        key = f"inl_{user_id}_social"
+        user_data[key] = link
+        cb = CommonParamInline(key=key)
+        articles.append(
+            InlineQueryResultArticle(
+                id='dl_social',
+                title=f'Download {label} video',
+                input_message_content=InputTextMessageContent(
+                    message_text=f"Downloading {label} video...\n{link}",
+                ),
+                description=f'Download video from {label}',
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(
+                        text="Download",
+                        callback_data=cb.pack(),
+                    )]]
+                ),
             )
-        else:
-            logger.warning(f'Extraction failed for {link}, using callback fallback')
-            key = f"inl_{user_id}_social"
-            user_data[key] = link
-            cb = CommonParamInline(key=key)
-            articles.append(
-                InlineQueryResultArticle(
-                    id='dl_social',
-                    title=f'Download {label} video',
-                    input_message_content=InputTextMessageContent(
-                        message_text=f"Downloading {label} video...\n{link}",
-                    ),
-                    description=f'Download video from {label}',
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[[InlineKeyboardButton(
-                            text="Download",
-                            callback_data=cb.pack(),
-                        )]]
-                    ),
-                )
-            )
+        )
 
     else:
         articles.append(
