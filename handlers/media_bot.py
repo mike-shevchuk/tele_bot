@@ -171,7 +171,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     if mode == 'audio':
         ydl_opts = {
             'format': 'bestaudio/best',
-            'outtmpl': loc_media,
+            'outtmpl': f"media/{user_id}/%(title)s",
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
