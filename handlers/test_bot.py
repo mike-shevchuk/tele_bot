@@ -73,8 +73,10 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             title = entry.get('title', 'No title')
             channel = entry.get('channel', entry.get('uploader', 'Unknown'))
             duration = entry.get('duration')
-            video_url = entry.get('webpage_url') or entry.get('original_url', '')
-            thumbnail = entry.get('thumbnail', '')
+            video_url = entry.get('url') or entry.get('webpage_url', '')
+            # Flat extraction: build thumbnail from video ID
+            video_id = entry.get('id', '')
+            thumbnail = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else ''
 
             key = f"inl_{user_id}_{i}"
             user_data[key] = video_url
