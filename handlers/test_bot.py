@@ -67,16 +67,14 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             return
 
         logger.info(f'YouTube search via inline: {search_text}')
-        entries = bot_func.search_youtube(search_text, max_results=5)
+        entries = bot_func.search_youtube(search_text, max_results=3)
 
         for i, entry in enumerate(entries):
             title = entry.get('title', 'No title')
             channel = entry.get('channel', entry.get('uploader', 'Unknown'))
             duration = entry.get('duration')
-            video_url = entry.get('url', '')
-
-            key = f"inl_{user_id}_{i}"
-            user_data[key] = video_url
+            direct_url = entry.get('url', '')
+            thumbnail = entry.get('thumbnail', '')
 
             duration_str = ''
             if duration:
@@ -90,23 +88,19 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 description_parts.append(channel)
             description = ' | '.join(description_parts) if description_parts else 'YouTube video'
 
-            cb = CommonParamInline(key=key)
-            articles.append(
-                InlineQueryResultArticle(
-                    id=str(i),
-                    title=title,
-                    input_message_content=InputTextMessageContent(
-                        message_text=f"{title}\n{video_url}",
-                    ),
-                    description=description,
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[[InlineKeyboardButton(
-                            text="Download",
-                            callback_data=cb.pack(),
-                        )]]
-                    ),
+            if direct_url:
+                thumb = thumbnail or 'https://placehold.co/320x180.png'
+                articles.append(
+                    InlineQueryResultVideo(
+                        id=str(i),
+                        video_url=direct_url,
+                        mime_type='video/mp4',
+                        thumbnail_url=thumb,
+                        title=title,
+                        description=description,
+                        video_duration=int(duration) if duration else None,
+                    )
                 )
-            )
 
         if not articles:
             articles.append(
