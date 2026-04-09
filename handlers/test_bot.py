@@ -135,14 +135,32 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
         key = f"inl_{user_id}_social"
         user_data[key] = link
         cb = CommonParamInline(key=key)
+
+        # Extract metadata for preview thumbnail
+        info = bot_func.extract_video_info(link)
+        if info:
+            preview_title = info.get('title') or f'Download {label} video'
+            preview_thumb = info.get('thumbnail') or None
+            duration = info.get('duration')
+            desc_parts = [label]
+            if duration:
+                mins, secs = divmod(int(duration), 60)
+                desc_parts.append(f'{mins}:{secs:02d}')
+            preview_desc = ' | '.join(desc_parts)
+        else:
+            preview_title = f'Download {label} video'
+            preview_thumb = None
+            preview_desc = f'Download video from {label}'
+
         articles.append(
             InlineQueryResultArticle(
                 id='dl_social',
-                title=f'Download {label} video',
+                title=preview_title,
                 input_message_content=InputTextMessageContent(
                     message_text=f"Downloading {label} video...\n{link}",
                 ),
-                description=f'Download video from {label}',
+                description=preview_desc,
+                thumbnail_url=preview_thumb,
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(
                         text="Download",
