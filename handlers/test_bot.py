@@ -6,47 +6,15 @@ import asyncio
 import html
 import time
 from aiogram.filters.command import Command
-from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
 from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
 
-# Debounce: store last query time per user
 _last_query_time: dict[int, float] = {}
 
-
-
-class CommonParamTick(CallbackData, prefix="tick"):
-    # id: str
-    title: str
-    vid_data: str
-
 router = Router()
-# router.message.middleware(SharedContextMiddleware())
-
-
-# @router.inline_query()
-# async def inline_query_handler(inline_query: types.InlineQuery, logger):
-#     logger.trace('Inline  MOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOD')
-#     article = InlineQueryResultArticle(
-#         id=uuid4().hex,
-#         title="Check my profile",
-#         input_message_content=InputTextMessageContent(message_text="Check my profile by button bellow:"),
-#         article = InlineQueryResultArticle(
-#             id=uuid4().hex,
-#             title="Check my profile",
-#             input_message_content=InputTextMessageContent(message_text="Check my profile by button bellow:"),
-#             reply_markup=InlineKeyboardMarkup(
-#                 inline_keyboard=[[
-#                     InlineKeyboardButton(text="text")
-#                 ]]
-#             )
-#         )
-#     )
-#     await inline_query.answer(results=[article])
-#     ...
 
 async def check_access(message: types.Message, allowed_levels: list[Level]):
     user_bot = message.from_user
@@ -57,41 +25,58 @@ async def check_access(message: types.Message, allowed_levels: list[Level]):
         return None
     return user
 
+def _fmt_duration(secs):
+    if not secs:
+        return ''
+    m, s = divmod(int(secs), 60)
+    return f'{m}:{s:02d}'
+
+
+def _fmt_views(count):
+    if not count:
+        return ''
+    if count >= 1_000_000:
+        return f'{count / 1_000_000:.1f}M views'
+    if count >= 1_000:
+        return f'{count / 1_000:.1f}K views'
+    return f'{count} views'
+
+
 @router.inline_query()
 async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func, user_data):
     query = inline_query.query.strip()
     user_id = inline_query.from_user.id
     logger.trace(f'Inline Query: {query=}')
 
-    # Debounce: wait 1s, skip if user typed more
     if query:
         now = time.time()
         _last_query_time[user_id] = now
         await asyncio.sleep(1)
         if _last_query_time.get(user_id) != now:
-            return  # User kept typing, skip this query
+            return
+        # Bound the debounce dict
+        if len(_last_query_time) > 1000:
+            cutoff = now - 300
+            for uid in [k for k, v in _last_query_time.items() if v < cutoff]:
+                _last_query_time.pop(uid, None)
 
     articles = []
 
-    # Detect social media links first
     if any(domain in query for domain in ['tiktok.com', 'instagram.com']):
-        link = query.strip()
+        link = query
         label = 'TikTok' if 'tiktok.com' in link else 'Instagram'
 
         key = f"inl_{user_id}_social"
-        user_data[key] = {'url': link, 'mode': 'social'}
+        user_data[key] = {'url': link, 'mode': 'social', 'title': ''}
         cb = CommonParamInline(key=key)
 
-        info = bot_func.extract_video_info(link)
+        info = await asyncio.to_thread(bot_func.extract_video_info, link)
         if info:
             preview_title = info.get('title') or f'Download {label} video'
             preview_thumb = info.get('thumbnail') or None
-            duration = info.get('duration')
-            desc_parts = [label]
-            if duration:
-                mins, secs = divmod(int(duration), 60)
-                desc_parts.append(f'{mins}:{secs:02d}')
-            preview_desc = ' | '.join(desc_parts)
+            duration_str = _fmt_duration(info.get('duration'))
+            preview_desc = f'{label} | {duration_str}' if duration_str else label
+            user_data[key]['title'] = info.get('title', '')
         else:
             preview_title = f'Download {label} video'
             preview_thumb = None
@@ -115,57 +100,37 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
             )
         )
 
-    elif query.strip():
-        # "v query" → YouTube video search, "query" → YouTube audio/MP3
+    elif query:
         if query.startswith('v ') and len(query) > 2:
             search_text = query[2:].strip()
             mode = 'video'
             btn_label = 'Download MP4'
         else:
-            search_text = query.strip()
+            search_text = query
             mode = 'audio'
             btn_label = 'Download MP3'
 
         if search_text:
             logger.info(f'YouTube {mode} search: {search_text}')
-            entries = bot_func.search_youtube(search_text, max_results=5)
+            entries = await asyncio.to_thread(bot_func.search_youtube, search_text, 5)
 
             for i, entry in enumerate(entries):
                 title = entry.get('title', 'No title')
-                channel = entry.get('channel', entry.get('uploader', 'Unknown'))
-                duration = entry.get('duration')
+                channel = entry.get('channel') or entry.get('uploader', '')
                 video_url = entry.get('url') or entry.get('webpage_url', '')
                 video_id = entry.get('id', '')
-                thumbnail = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else ''
+                thumb = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else 'https://placehold.co/320x180.png'
 
                 key = f"inl_{user_id}_{i}"
                 user_data[key] = {'url': video_url, 'mode': mode, 'title': title}
 
-                duration_str = ''
-                if duration:
-                    mins, secs = divmod(int(duration), 60)
-                    duration_str = f'{mins}:{secs:02d}'
+                parts = [p for p in (
+                    _fmt_duration(entry.get('duration')),
+                    _fmt_views(entry.get('view_count')),
+                    channel,
+                ) if p]
+                description = ' | '.join(parts) if parts else 'YouTube'
 
-                view_count = entry.get('view_count')
-                views_str = ''
-                if view_count:
-                    if view_count >= 1_000_000:
-                        views_str = f'{view_count / 1_000_000:.1f}M views'
-                    elif view_count >= 1_000:
-                        views_str = f'{view_count / 1_000:.1f}K views'
-                    else:
-                        views_str = f'{view_count} views'
-
-                description_parts = []
-                if duration_str:
-                    description_parts.append(duration_str)
-                if views_str:
-                    description_parts.append(views_str)
-                if channel:
-                    description_parts.append(channel)
-                description = ' | '.join(description_parts) if description_parts else 'YouTube'
-
-                thumb = thumbnail or 'https://placehold.co/320x180.png'
                 cb = CommonParamInline(key=key)
                 articles.append(
                     InlineQueryResultArticle(
