@@ -1,0 +1,37 @@
+name: Lint
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff==0.11.6
+
+      # Critical rules — these catch code that is broken and will crash at runtime.
+      # The build FAILS if any of these are found.
+      #
+      # E9  — Syntax errors (IndentationError, invalid Python — code won't even parse)
+      # F63 — Invalid comparisons (e.g. `x is "string"`, `if x == []:` — bugs hiding as logic)
+      # F7  — Control flow mistakes (break/continue outside loop, return outside function)
+      # F82 — Undefined names (using a variable/function that doesn't exist — NameError at runtime)
+      - name: Critical errors (blocking)
+        run: ruff check --select E9,F63,F7,F82 .
+
+      # Everything else — style issues, unused imports, line length, etc.
+      # Reported for visibility but does NOT fail the build.
+      # `|| true` ensures the step always succeeds regardless of ruff's exit code.
+      - name: Style warnings (non-blocking)
+        run: ruff check . || true
