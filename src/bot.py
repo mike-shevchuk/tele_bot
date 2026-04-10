@@ -45,40 +45,24 @@ class Bot_Func:
         self.root_prj = root_prj
 
     def extract_video_info(self, url):
-        """Extract direct video URL and metadata without downloading."""
-        ydl_opts = {
-            'quiet': True,
-            'format': 'best',
-        }
+        """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
                 info = ydl.extract_info(url, download=False)
-                direct_url = info.get('url', '')
-                self.log.info(f'extract_video_info: title={info.get("title")}, '
-                              f'has_url={bool(direct_url)}, url_len={len(direct_url)}, '
-                              f'ext={info.get("ext")}, format={info.get("format")}')
                 return {
-                    'url': direct_url,
                     'thumbnail': info.get('thumbnail', ''),
                     'title': info.get('title', 'Video'),
                     'duration': info.get('duration', 0),
-                    'filesize': info.get('filesize') or info.get('filesize_approx') or 0,
                 }
         except Exception as e:
             self.log.error(f"Video info extraction error: {e}")
             return None
 
     def search_youtube(self, query, max_results=3):
-        """Search YouTube and return entries with video metadata."""
-        ydl_opts = {
-            'quiet': True,
-            'extract_flat': True,
-        }
+        """Search YouTube via ytsearch. Blocking."""
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(
-                    f"ytsearch{max_results}:{query}", download=False
-                )
+            with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+                result = ydl.extract_info(f"ytsearch{max_results}:{query}", download=False)
                 return result.get('entries', [])
         except Exception as e:
             self.log.error(f"YouTube search error: {e}")

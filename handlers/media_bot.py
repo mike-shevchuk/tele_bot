@@ -3,14 +3,32 @@ from aiogram import F, Bot, types, Router
 from src.bot import CommonParamYouTube, CommonParamInline
 import jinja2
 from src import utils as ut
-import os
-import glob
-
-
-from handlers.test_bot import CommonParamTick
 
 
 router_med = Router()
+
+_YDL_OPTS_BY_MODE = {
+    'audio': {
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+    },
+    'video': {
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'merge_output_format': 'mp4',
+    },
+    'social': {
+        'format': 'bestvideo+bestaudio/best',
+        'merge_output_format': 'mp4',
+    },
+}
+
+_CAPTION_TEMPLATE = jinja2.Environment().from_string(
+    "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
+)
 # BOT_NAME = 'med_soc_bot'
 
 
@@ -109,13 +127,6 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
 
 
 
-@router_med.callback_query(F.data.startswith("tick"))
-async def handle_callback_reel(callback_query: types.CallbackQuery, logger, user_data, bot_func):
-    cb1 = CommonParamTick.unpack(callback_query.data)
-    logger.info(f'callback catch {cb1}')
-    await callback_query.answer("This button is outdated, use the new inline search.")
-
-
 @router_med.callback_query(F.data.startswith("idl"))
 async def handle_inline_download(callback_query: types.CallbackQuery, logger, user_data, bot_func, cfg, bot: Bot):
     cb = CommonParamInline.unpack(callback_query.data)
@@ -126,27 +137,20 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
         await callback_query.answer("Link expired. Try searching again.")
         return
 
-    # Support both old format (string) and new format (dict)
-    if isinstance(data, str):
-        url = data
-        mode = 'social'
-        media_title = ''
-    else:
-        url = data['url']
-        mode = data.get('mode', 'social')
-        media_title = data.get('title', '')
+    url = data['url']
+    mode = data.get('mode', 'social')
+    media_title = data.get('title', '')
 
-    user_bot = callback_query.from_user
-    user_id = user_bot.id
+    user_id = callback_query.from_user.id
     df_t = ut.get_user_by_id(user_id)
     if df_t.empty:
-        await callback_query.answer("You are not registered. Send /start to the bot first.")
+        await callback_query.answer("Ти не зареганий натисни /start")
         return
 
     user = ut.pandas2pydentic(df_t)
     available_memory = user.level.value - user.use_memory
     if available_memory < 0:
-        await callback_query.answer("You've exceeded your download limit.")
+        await callback_query.answer("Ви використали свій ліміт на цей місяць")
         return
 
     await callback_query.answer("Downloading...")
@@ -154,63 +158,29 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     inline_msg_id = callback_query.inline_message_id
     if inline_msg_id:
         try:
-            await bot.edit_message_text(
-                "Downloading...",
-                inline_message_id=inline_msg_id,
-            )
-        except Exception:
-            pass
+            await bot.edit_message_text("Downloading...", inline_message_id=inline_msg_id)
+        except Exception as e:
+            logger.debug(f'edit inline status failed: {e}')
 
     status_msg = await bot.send_message(user_id, "Start downloading ...")
 
-    environment = jinja2.Environment()
-    answer_template = environment.from_string(
-        "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
-    )
-
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_media = f"media/{user_id}/{current_date}"
-
-    if mode == 'audio':
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': loc_media,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-        }
-    elif mode == 'video':
-        ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'outtmpl': loc_media,
-            'merge_output_format': 'mp4',
-        }
-    else:  # social
-        ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
-            'outtmpl': loc_media,
-            'merge_output_format': 'mp4',
-        }
+    loc_media = f"media/{user_id}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    ydl_opts = {**_YDL_OPTS_BY_MODE[mode], 'outtmpl': loc_media}
 
     res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
     if not res:
-        await bot.send_message(user_id, 'Failed to download. Check the link and try again.')
+        await bot.send_message(user_id, 'Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
         if inline_msg_id:
             try:
-                await bot.edit_message_text(
-                    "Download failed",
-                    inline_message_id=inline_msg_id,
-                )
-            except Exception:
-                pass
+                await bot.edit_message_text("Download failed", inline_message_id=inline_msg_id)
+            except Exception as e:
+                logger.debug(f'edit inline failure status failed: {e}')
         logger.warning(f'Failed inline download {url} for user {user_id}')
         return
     loc_media, file_size = res
 
     available_memory -= file_size
-    answer_cap = answer_template.render(
+    answer_cap = _CAPTION_TEMPLATE.render(
         bot_name=cfg.shared_vars.bot_name,
         avail_mem=ut.h_readable(available_memory),
         progress_bar_str_value=ut.progress_bar_str(user.use_memory, user.level.value),
@@ -218,9 +188,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     )
 
     try:
-        is_audio = loc_media.endswith('mp3') or loc_media.endswith('m4a')
-
-        if is_audio:
+        if mode == 'audio':
             dm_msg = await bot.send_audio(
                 chat_id=user_id,
                 audio=types.FSInputFile(loc_media),
@@ -234,32 +202,23 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
                 caption=answer_cap,
             )
 
-        # Replace the inline message with the actual video/audio
-        logger.info(f'inline_msg_id={inline_msg_id}, has_video={bool(dm_msg.video)}, '
-                     f'has_document={bool(dm_msg.document)}, has_audio={bool(dm_msg.audio)}')
         if inline_msg_id and dm_msg:
-            file_id = None
-            if is_audio and dm_msg.audio:
-                file_id = dm_msg.audio.file_id
-                media = types.InputMediaAudio(media=file_id, caption=f'@{cfg.shared_vars.bot_name}')
+            if mode == 'audio' and dm_msg.audio:
+                media = types.InputMediaAudio(
+                    media=dm_msg.audio.file_id,
+                    caption=f'@{cfg.shared_vars.bot_name}',
+                )
             elif dm_msg.video:
-                file_id = dm_msg.video.file_id
-                media = types.InputMediaVideo(media=file_id, caption=answer_cap)
+                media = types.InputMediaVideo(media=dm_msg.video.file_id, caption=answer_cap)
             elif dm_msg.document:
-                file_id = dm_msg.document.file_id
-                media = types.InputMediaDocument(media=file_id, caption=answer_cap)
+                media = types.InputMediaDocument(media=dm_msg.document.file_id, caption=answer_cap)
             else:
                 media = None
 
-            logger.info(f'edit_message_media: file_id={bool(file_id)}, media_type={type(media).__name__ if media else None}')
             if media:
                 try:
-                    await bot.edit_message_media(
-                        media=media,
-                        inline_message_id=inline_msg_id,
-                    )
+                    await bot.edit_message_media(media=media, inline_message_id=inline_msg_id)
                     await dm_msg.delete()
-                    logger.info('Inline message replaced with media successfully')
                 except Exception as e:
                     logger.error(f'edit_message_media failed: {e}')
 
@@ -268,9 +227,6 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
 
     user.use_memory += file_size
     ut.update_row(user)
-
-    loc_match = glob.glob(os.path.join('.', f'{loc_media}*'))
-    if loc_match:
-        ut.delete_video_file(loc_match[0])
+    ut.delete_video_file(loc_media)
 
     user_data.pop(cb.key, None)
