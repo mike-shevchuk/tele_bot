@@ -6,7 +6,6 @@ import asyncio
 from dotenv import load_dotenv
 import pandas as pd
 import loguru
-from pprint import pprint
 
 from src.Users import UserTele
 from src.bot import Bot_Func
@@ -15,7 +14,6 @@ import jinja2
 
 from aiogram import F, Bot, Dispatcher, types, Router
 from aiogram.filters.command import Command
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.types.user import User as TgUser
 from src.MiddleWare import SharedContextMiddleware
 from handlers import test_bot, media_bot, voice_stt
@@ -25,7 +23,6 @@ from handlers import test_bot, media_bot, voice_stt
 from src.Users import UserTele
 from src.bot import Bot_Func
 from src import utils as ut
-from src.bot import CommonParamYouTube
 
 import glob
 

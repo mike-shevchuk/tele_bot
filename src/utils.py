@@ -11,8 +11,6 @@ from functools import reduce
 import numpy as np
 import re
 from src.Users import UserTele, Level
-from src.Errors import CSVError
-
 
 root_prj = Path(__file__).parent.parent.absolute()
 

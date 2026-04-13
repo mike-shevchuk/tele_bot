@@ -3,9 +3,6 @@ from src import utils as ut
 import glob
 import yt_dlp
 import os
-import json
-from pprint import pprint
-import aiogram
 from aiogram.filters.callback_data import CallbackData
 # import aiogram.filters.callback_data.CallbackData
 
