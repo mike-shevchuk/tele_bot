@@ -23,9 +23,9 @@ def get_name_from_pydantic(user: UserTele) -> str:
     elif full_name:
         return full_name
     else:
-        return user.id
+        return str(user.id)
 
-def progress_bar_str(current: int, max_value: int, length=8) -> str:
+def progress_bar_str(current: float, max_value: float, length=8) -> str:
     percent = 100 * current / max_value
     percent = round(percent, 2)
     filled = int(length * current // max_value)
@@ -80,7 +80,7 @@ def load_config(config_path='configs/cfg.yml'):
     return config
 
 
-def parse_config(cfg, shared_vars) -> dict:
+def parse_config(cfg, shared_vars) -> None:
     # TODO: check is str a path is path normalizete it
     for key, value in cfg.items():
         if isinstance(value, dict):
@@ -97,14 +97,14 @@ def parse_config(cfg, shared_vars) -> dict:
             cfg[key] = new_value
  
 
-def pydantic2pandas(user) -> pd.DataFrame:
+def pydantic2pandas(user: UserTele) -> pd.DataFrame:
     user_df = pd.DataFrame([user.to_dict()])
     user_df = user_df.replace({np.nan: None})
     user_df.set_index('id', inplace=True)
     return user_df
 
 
-def pandas2pydentic(user_df) -> UserTele:
+def pandas2pydentic(user_df: pd.DataFrame) -> UserTele:
     user_id = int(user_df.index[0])
     user_dct = user_df.to_dict(orient='records')[0]
     user_dct['id'] = user_id 
@@ -123,10 +123,10 @@ def create_empty_csv() -> pd.DataFrame:
     save_reg_user(user_df)
     return user_df
 
-def remove_non_ascii(text) -> str:
+def remove_non_ascii(text: str) -> str:
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
-def get_user_by_id(usr_id) -> pd.DataFrame:
+def get_user_by_id(usr_id: int) -> pd.DataFrame:
     users_reg_df: pd.DataFrame  = get_reg_users()
 
     if usr_id in users_reg_df.index:
@@ -170,7 +170,7 @@ def get_reg_users() -> pd.DataFrame:
     ...
 
 
-def save_reg_user(df) -> None:
+def save_reg_user(df: pd.DataFrame) -> None:
     reg_user_path = root_prj / 'data/reg_user.csv'
     df.to_csv(reg_user_path)
 
@@ -198,7 +198,7 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
 
 
 
-def expand_url(url) -> str:
+def expand_url(url: str) -> str:
     try:
         response = requests.head(url, allow_redirects=True)
         return response.url
