@@ -99,8 +99,8 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         youtube_url = youtube_url,
         name = title)
     try:
-        #HACK: delete later
-        if loc_media.endswith('mp4'):
+        ext = os.path.splitext(loc_media)[1].lower()
+        if ext in ('.mp4', '.mkv', '.webm'):
             logger.info(f'Sending as video: {loc_media}')
             await bot_msg.answer_video(
                                         video=types.FSInputFile(loc_media),
