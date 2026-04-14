@@ -126,15 +126,21 @@ class Bot_Func:
             self.log.success(f"✅ Download successful! {loc_video}")
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
+            await strt_dwn_msg.delete()
             await user_msg.reply(f"Download error: {e}")
             return
         except Exception as e:
             self.log.error(f"❌ An error occurred: {e}")
+            await strt_dwn_msg.delete()
             await user_msg.reply(f"An error occurred: {e}")
             return
 
         pattern = glob.escape(loc_video.replace('.%(ext)s', '')) + '.*'
         loc_match = glob.glob(os.path.join('.', pattern))
+
+        if not loc_match:
+            await user_msg.reply(f"Download finished but file not found. {loc_video=}")
+            return
 
         loc_video  = loc_match[0]
         # await info_wait_button.delete()

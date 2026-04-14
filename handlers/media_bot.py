@@ -170,6 +170,7 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
     ydl_opts = {**_YDL_OPTS_BY_MODE[mode], 'outtmpl': loc_media}
 
     res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
+    await status_msg.delete()
     if not res:
         await bot.send_message(user_id, 'Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
         if inline_msg_id:
@@ -226,6 +227,9 @@ async def handle_inline_download(callback_query: types.CallbackQuery, logger, us
 
     except Exception as e:
         await bot.send_message(user_id, f"Error sending media: {e}")
+        ut.delete_video_file(loc_media)
+        user_data.pop(cb.key, None)
+        return
 
     user.use_memory += file_size
     ut.update_row(user)
