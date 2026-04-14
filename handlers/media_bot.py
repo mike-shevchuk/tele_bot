@@ -50,13 +50,13 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # TODO: loc video must to be with real name
     full_name_video = current_date +'__'+ title
-    loc_media = f"media/{user.id}/{full_name_video}" 
+    loc_media = f"media/{user.id}/{full_name_video}.%(ext)s"
 
     # Options for yt-dlp without post-processing
     ydl_opts = {
         # 'format': f'{format_id}+bestaudio/best[ext=m4a]',  # Combine video format with best audio  
         # #'format': 'bestvideo[ext=mp4]+bestaudio[ext=mp4]/mp4+best[height<=480]', 
-        'format': f'{format_id}+m4a/bestaudio/best',
+        'format': f'{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best',
         'outtmpl': loc_media,
         # 'outtmpl': '%(title)s.%(ext)s'
     }
@@ -80,11 +80,13 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
     try:
         #HACK: delete later
         if loc_media.endswith('mp4'):
+            logger.info(f'Sending as video: {loc_media}')
             await bot_msg.answer_video(
-                                        video=types.FSInputFile(loc_media), 
+                                        video=types.FSInputFile(loc_media),
                                         caption=answer_cap,
                                         title=title)
         else:
+            logger.info(f'Sending as audio: {loc_media}')
             await bot_msg.answer_audio(audio=types.FSInputFile(loc_media),
                                     caption = f'@{cfg.shared_vars.bot_name}',
                                     title=title)
