@@ -15,7 +15,7 @@ from src.Users import UserTele, Level
 root_prj = Path(__file__).parent.parent.absolute()
 
 # get name or nickname from username or full_name something that exists in db
-def get_name_from_pydantic(user: UserTele):
+def get_name_from_pydantic(user: UserTele) -> str:
     username = user.username
     full_name = user.full_name
     if username:
@@ -25,7 +25,7 @@ def get_name_from_pydantic(user: UserTele):
     else:
         return user.id
 
-def progress_bar_str(current, max_value, length=8):
+def progress_bar_str(current: int, max_value: int, length=8) -> str:
     percent = 100 * current / max_value
     percent = round(percent, 2)
     filled = int(length * current // max_value)
@@ -33,7 +33,7 @@ def progress_bar_str(current, max_value, length=8):
     bar = '🟥' * filled + '🟩' * (length - filled)
     return f'{bar} {percent} %'
 
-def crt_cfg_params(cfg_params):
+def crt_cfg_params(cfg_params) -> dict:
     cfg = load_config('configs/cfg.yml')
     cfg_params_copy = edict(cfg_params.copy())
     res = edict()
@@ -80,7 +80,7 @@ def load_config(config_path='configs/cfg.yml'):
     return config
 
 
-def parse_config(cfg, shared_vars):
+def parse_config(cfg, shared_vars) -> dict:
     # TODO: check is str a path is path normalizete it
     for key, value in cfg.items():
         if isinstance(value, dict):
@@ -97,14 +97,14 @@ def parse_config(cfg, shared_vars):
             cfg[key] = new_value
  
 
-def pydantic2pandas(user):
+def pydantic2pandas(user) -> pd.DataFrame:
     user_df = pd.DataFrame([user.to_dict()])
     user_df = user_df.replace({np.nan: None})
     user_df.set_index('id', inplace=True)
     return user_df
 
 
-def pandas2pydentic(user_df):
+def pandas2pydentic(user_df) -> UserTele:
     user_id = int(user_df.index[0])
     user_dct = user_df.to_dict(orient='records')[0]
     user_dct['id'] = user_id 
@@ -115,7 +115,7 @@ def pandas2pydentic(user_df):
     return user_tele
 
 
-def create_empty_csv():
+def create_empty_csv() -> pd.DataFrame:
     us_test = UserTele.get_example()
     t_id = us_test.id
     user_df = pydantic2pandas(us_test)
@@ -123,10 +123,10 @@ def create_empty_csv():
     save_reg_user(user_df)
     return user_df
 
-def remove_non_ascii(text):
+def remove_non_ascii(text) -> str:
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
-def get_user_by_id(usr_id):
+def get_user_by_id(usr_id) -> pd.DataFrame:
     users_reg_df: pd.DataFrame  = get_reg_users()
 
     if usr_id in users_reg_df.index:
@@ -137,7 +137,7 @@ def get_user_by_id(usr_id):
         return pd.DataFrame()
 
 
-def update_row(user:UserTele):
+def update_row(user:UserTele) -> None:
     all_df = get_reg_users()
     user_row = pydantic2pandas(user)
     logger.trace(f'{all_df=}, \n{user_row=}')
@@ -145,7 +145,7 @@ def update_row(user:UserTele):
     save_reg_user(all_df)
 
 
-def get_reg_users():
+def get_reg_users() -> pd.DataFrame:
     reg_user_path = root_prj / 'data/reg_user.csv'
     print(f'{reg_user_path.parent=}')
     reg_user_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,7 +170,7 @@ def get_reg_users():
     ...
 
 
-def save_reg_user(df):
+def save_reg_user(df) -> None:
     reg_user_path = root_prj / 'data/reg_user.csv'
     df.to_csv(reg_user_path)
 
@@ -198,7 +198,7 @@ def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
 
 
 
-def expand_url(url):
+def expand_url(url) -> str:
     try:
         response = requests.head(url, allow_redirects=True)
         return response.url
@@ -207,7 +207,7 @@ def expand_url(url):
         return url
 
 
-def h_readable(file_size, unit='B'):
+def h_readable(file_size: int | float, unit='B') -> str:
     if file_size > 1024 * 1024:
         file_size /=  1024 * 1024
         unit = 'MB'
@@ -218,7 +218,7 @@ def h_readable(file_size, unit='B'):
 
 
 
-def delete_video_file(file_path):
+def delete_video_file(file_path) -> None:
     try:
         # Check if the file exists
         if os.path.exists(file_path):
