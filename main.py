@@ -57,13 +57,13 @@ async def start_user(message:types.Message):
         all_df = pd.concat([users_reg_df, df])   #.reset_index(drop=True)
         ut.save_reg_user(all_df)
         logger.debug(f'Add new user {usr.id} {ut.get_name_from_pydantic(usr)}')
-        await message.answer(f'Все готово. Гарного користування!')
+        await message.answer('Все готово. Гарного користування!')
     else:
         await message.answer(f'Скучали за тобою {usr.id}')
         return 
 
 
-@dp.message(lambda msg: msg.text and any(link in msg.text for link in ['youtu.be', 'youtube.com']))
+@dp.message(lambda msg: msg.text and not msg.via_bot and any(link in msg.text for link in ['youtu.be', 'youtube.com']))
 async def cmd_numbers(message: types.Message):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
@@ -72,17 +72,17 @@ async def cmd_numbers(message: types.Message):
     df_t = ut.get_user_by_id(user_bot.id)
 
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
     available_memory = user.level.value - user.use_memory
     logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(available_memory)=}')
-    
+
     if available_memory < 0:
         await message.reply(f"Ви використали свій ліміт({ut.h_readable(user.level.value)})"+
-                             f" на цей місяць, підніміть свій статус")
+                             " на цей місяць, підніміть свій статус")
         return
-    
+
     wait_bot_msg = await message.reply(f"Твоя лінка на youtube повідомлення опрацьовується!\
                                         У тебе лишилося {ut.h_readable(available_memory)}", disable_notification=True)
     logger.success(f'Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}')
@@ -93,12 +93,12 @@ async def cmd_numbers(message: types.Message):
         logger.warning(f'Failed to download media formats with link {message.text}\n\n\n')
         return
 
-        
+
     yt_info, all_butons = res
     video_name = yt_info['title']
     id_video = yt_info['id']
     await message.reply(
-                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" + 
+                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" +
                         f"Vidoe --> {video_name}\nId --> {id_video} \n" +
                         f"У тебе лишилося {ut.h_readable(available_memory)}",
                         reply_markup=all_butons)
@@ -107,7 +107,7 @@ async def cmd_numbers(message: types.Message):
 
 
 
-@dp.message(lambda msg: msg.text and any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
+@dp.message(lambda msg: msg.text and not msg.via_bot and any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
@@ -118,7 +118,7 @@ async def handle_inst_tick(message: types.Message, cfg):
         "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
     )
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     
     user = ut.pandas2pydentic(df_t)
@@ -127,7 +127,7 @@ async def handle_inst_tick(message: types.Message, cfg):
     if availMemory < 0:
         await message.reply(
             f"Ви використали свій ліміт({ut.h_readable(user.level.value)}) на цей місяць,"+
-              f"підніміть свій статус"
+              "підніміть свій статус"
             )
         return
 

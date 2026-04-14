@@ -3,8 +3,9 @@ from src import utils as ut
 import glob
 import yt_dlp
 import os
+import asyncio
+import time
 from aiogram.filters.callback_data import CallbackData
-# import aiogram.filters.callback_data.CallbackData
 
 from aiogram import types
 
@@ -30,6 +31,10 @@ class CommonParamYouTube(CallbackData, prefix="vid"):
     vid_data: str
 
 
+class CommonParamInline(CallbackData, prefix="idl"):
+    key: str
+
+
 
 
 
@@ -39,37 +44,106 @@ class Bot_Func:
         self.log = log
         self.root_prj = root_prj
 
+    def extract_video_info(self, url):
+        """Extract video metadata (title, thumbnail, duration). Blocking."""
+        try:
+            with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return {
+                    'thumbnail': info.get('thumbnail', ''),
+                    'title': info.get('title', 'Video'),
+                    'duration': info.get('duration', 0),
+                }
+        except Exception as e:
+            self.log.error(f"Video info extraction error: {e}")
+            return None
+
+    def search_youtube(self, query, max_results=3):
+        """Search YouTube via ytsearch. Blocking."""
+        try:
+            with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+                result = ydl.extract_info(f"ytsearch{max_results}:{query}", download=False)
+                return result.get('entries', [])
+        except Exception as e:
+            self.log.error(f"YouTube search error: {e}")
+            return []
 
 
-    # TODO: remove from main
+
     async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink=''):
         med_url = youtubeLink if youtubeLink else user_msg.text
 
         loc_video = ydl_opts['outtmpl']
 
+        strt_dwn_msg = None
         try:
-            # TODO: make async not now
-            # TODO: add captions not now
-            # logger.debug(f'Start download video {loc_video}') 
-            strt_dwn_msg = await user_msg.answer("Start downloading ...")
-            self.log.debug(f'Start download video {loc_video}') 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([med_url])
-                # self.log.trace(f'{info=}')
+            strt_dwn_msg = await user_msg.answer("Downloading... 0%\n⬜⬜⬜⬜⬜⬜⬜⬜")
+            self.log.debug(f'Start download video {loc_video}')
+
+            loop = asyncio.get_running_loop()
+            last_update = [0.0]
+
+            async def _edit_progress(text):
+                try:
+                    await strt_dwn_msg.edit_text(text)
+                except Exception:
+                    pass
+
+            def progress_hook(d):
+                if d['status'] != 'downloading':
+                    return
+                now = time.time()
+                if now - last_update[0] < 2:
+                    return
+                last_update[0] = now
+
+                total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                downloaded = d.get('downloaded_bytes', 0)
+                if total <= 0:
+                    return
+
+                pct = downloaded / total * 100
+                filled = int(8 * downloaded // total)
+                bar = '🟩' * filled + '⬜' * (8 - filled)
+                speed = d.get('speed', 0)
+                speed_str = f" | {speed / 1024 / 1024:.1f} MB/s" if speed else ""
+                text = f"Downloading... {pct:.0f}%\n{bar}{speed_str}"
+
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        _edit_progress(text), loop
+                    )
+                except Exception:
+                    pass
+
+            ydl_opts_with_hook = {**ydl_opts, 'progress_hooks': [progress_hook]}
+
+            def download():
+                with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
+                    ydl.download([med_url])
+
+            await asyncio.to_thread(download)
             await strt_dwn_msg.delete()
-            # await message.edit_caption(caption="✅ Download successful!")
             self.log.success(f"✅ Download successful! {loc_video}")
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
+            if strt_dwn_msg:
+                await strt_dwn_msg.delete()
             await user_msg.reply(f"Download error: {e}")
             return
         except Exception as e:
             self.log.error(f"❌ An error occurred: {e}")
+            if strt_dwn_msg:
+                await strt_dwn_msg.delete()
             await user_msg.reply(f"An error occurred: {e}")
             return
 
         pattern = glob.escape(loc_video.replace('.%(ext)s', '')) + '.*'
         loc_match = glob.glob(os.path.join('.', pattern))
+
+        if not loc_match:
+            await user_msg.reply(f"Download finished but file not found. {loc_video=}")
+            return
 
         loc_video  = loc_match[0]
         # await info_wait_button.delete()
@@ -105,7 +179,7 @@ class Bot_Func:
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
-                self.log.info(f'Скачується формати відео  .....')
+                self.log.info('Скачується формати відео  .....')
                 info_dict = ydl.extract_info(video_url, download=False)
                 video_name = info_dict['title']
                 self.log.info(f'Скачали формати відео з назвою {video_name}')
@@ -126,7 +200,7 @@ class Bot_Func:
     def get_keyboard(self, link):
         try:
             yt_info = self._list_formats(link)
-        except Exception as e:
+        except Exception:
             self.log.error('Failed to download youtube format')
             return
 
