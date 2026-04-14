@@ -1,3 +1,9 @@
+# First-time setup: install deps + git hooks (run once after cloning)
+setup:
+    pip install -r requirements.txt
+    git config --unset-all core.hooksPath || true
+    pre-commit install
+
 # Lint: blocking errors only (same as CI)
 lint:
     ruff check --select E9,F63,F7,F82 .
