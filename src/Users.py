@@ -15,7 +15,7 @@ class Level(Enum):
 
 class UserTele(BaseModel):
     id: int = Field(..., description='Telegram user id. Examples: 1234567')
-
+    # chat_id: int
     is_bot: bool = Field(..., description='Param is it user or bot. Examples: True/False')
     language_code:  Optional[str] = Field(description='Telegram UI language. Examples: en')
     
@@ -26,6 +26,7 @@ class UserTele(BaseModel):
     is_premium: Optional[bool] = Field(description='Is user premium. Example: True/False')
     
     level: Level = Field(default=Level.chel, description='Users level. Example: dubil')
+    # free_memory: float = level.value
     use_memory: float = Field(default=0, description='Used memory. Example: 0') 
 
 

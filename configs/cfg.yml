@@ -7,7 +7,9 @@ logger:
 
 shared_vars:
     prj_root: ''
+    # bot_name: 'socDrift'
     bot_name: 'med_soc_bot'
+    # bot_name: 'med_link_bot'
     # db_col_name: 'mikes_test'
     db_col_name: 'chat-bot'
     workers_n: 1
