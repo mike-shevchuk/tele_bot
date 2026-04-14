@@ -18,12 +18,6 @@ from aiogram.types.user import User as TgUser
 from src.MiddleWare import SharedContextMiddleware
 from handlers import test_bot, media_bot, voice_stt
 
-# from aiogram.filters import Text
-
-from src.Users import UserTele
-from src.bot import Bot_Func
-from src import utils as ut
-
 import glob
 
 user_data = {}

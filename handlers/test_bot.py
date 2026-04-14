@@ -1,12 +1,11 @@
 from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
 import html
 from aiogram.filters.command import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
-from aiogram.fsm.storage.memory import MemoryStorage
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
