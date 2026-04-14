@@ -12,7 +12,7 @@ from src.bot import Bot_Func
 from src import utils as ut
 import jinja2
 
-from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
 from aiogram.types.user import User as TgUser
 from src.MiddleWare import SharedContextMiddleware
