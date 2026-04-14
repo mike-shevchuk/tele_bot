@@ -1,11 +1,8 @@
 from datetime import datetime
-from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram import F, types, Router
 from src.bot import CommonParamYouTube
 import jinja2
 from src import utils as ut
-import os
-import glob
-
 
 from handlers.test_bot import CommonParamTick
 

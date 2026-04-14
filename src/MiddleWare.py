@@ -1,7 +1,7 @@
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 
-from aiogram.types import TelegramObject, Message
-from typing import Callable, Dict, Any, Awaitable
+from aiogram.types import TelegramObject
+from typing import Dict, Any
 
 
 class SharedContextMiddleware(BaseMiddleware):
