@@ -75,6 +75,7 @@ class Bot_Func:
 
         loc_video = ydl_opts['outtmpl']
 
+        strt_dwn_msg = None
         try:
             strt_dwn_msg = await user_msg.answer("Downloading... 0%\n⬜⬜⬜⬜⬜⬜⬜⬜")
             self.log.debug(f'Start download video {loc_video}')
@@ -126,12 +127,14 @@ class Bot_Func:
             self.log.success(f"✅ Download successful! {loc_video}")
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
-            await strt_dwn_msg.delete()
+            if strt_dwn_msg:
+                await strt_dwn_msg.delete()
             await user_msg.reply(f"Download error: {e}")
             return
         except Exception as e:
             self.log.error(f"❌ An error occurred: {e}")
-            await strt_dwn_msg.delete()
+            if strt_dwn_msg:
+                await strt_dwn_msg.delete()
             await user_msg.reply(f"An error occurred: {e}")
             return
 
