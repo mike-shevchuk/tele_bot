@@ -248,9 +248,8 @@ async def cmd_me(message: types.Message):
     await message.reply(
         f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}\n" 
         f"Твій рівень: {user.level.name}\n"
-        f"Ти використав {used_mb } з {total_mb} MB\n"
+        f"Ти використав {used_mb} з {total_mb} MB\n"
         f"{progress_bar_str_value}\n"
-        
         f"У тебе лишилось: {left_mb} MB"
         )
 
