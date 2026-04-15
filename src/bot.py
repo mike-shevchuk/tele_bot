@@ -3,6 +3,7 @@ from src import utils as ut
 import glob
 import re
 from datetime import datetime
+from pathlib import Path
 import yt_dlp
 import os
 import asyncio
@@ -74,7 +75,7 @@ class Bot_Func:
         loc_video = ydl_opts["outtmpl"]
 
         strt_dwn_msg = None
-        finished_files: list[str] = []
+        finished_file: str = ""
         try:
             strt_dwn_msg = await user_msg.answer("Downloading... 0%\n⬜⬜⬜⬜⬜⬜⬜⬜")
             self.log.debug(f"Start download video {loc_video}")
@@ -89,10 +90,9 @@ class Bot_Func:
                     pass
 
             def progress_hook(d):
+                nonlocal finished_file
                 if d["status"] == "finished":
-                    filename = d.get("filename", "")
-                    if filename:
-                        finished_files.append(filename)
+                    finished_file = d.get("filename", "")
                     return
                 if d["status"] != "downloading":
                     return
@@ -141,8 +141,8 @@ class Bot_Func:
             return
 
         # Resolve actual file path: prefer hook-captured name, fall back to glob
-        if finished_files and os.path.exists(finished_files[-1]):
-            loc_video = finished_files[-1]
+        if finished_file and os.path.exists(finished_file):
+            loc_video = finished_file
         else:
             base_path = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
             if not base_path or base_path.endswith("/"):
@@ -150,8 +150,7 @@ class Bot_Func:
                     f"Download finished but file not found. {loc_video=}"
                 )
                 return
-            pattern = glob.escape(base_path) + "*"
-            loc_match = glob.glob(os.path.join(".", pattern))
+            loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
             if not loc_match:
                 await user_msg.reply(
                     f"Download finished but file not found. {loc_video=}"
@@ -159,16 +158,11 @@ class Bot_Func:
                 return
             loc_video = loc_match[0]
 
-        # Check if the file exists
-        if not os.path.exists(loc_video):
-            await user_msg.reply(f"The video file does not exist. {loc_video=}")
-            return
-
         # Write sidecar .txt named {title}__{date}.txt
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        stem = os.path.splitext(loc_video)[0]
-        sidecar = f"{stem}__{date_str}.txt"
-        open(sidecar, "w").close()
+        stem, _ = ut.parse_media_filename(loc_video)
+        sidecar = f"{os.path.dirname(loc_video)}/{stem}__{date_str}.txt"
+        Path(sidecar).touch()
 
         self.log.info(f"File size: {ut.h_readable(os.path.getsize(loc_video))}")
 

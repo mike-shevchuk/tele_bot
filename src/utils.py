@@ -248,7 +248,7 @@ def delete_video_file(file_path) -> None:
             logger.warning(f"The file {file_path} does not exist.")
         # Also remove sidecar {stem}__{date}.txt if present
         stem = os.path.splitext(file_path)[0]
-        for sidecar in glob.glob(f"{stem}__*.txt"):
+        for sidecar in glob.glob(glob.escape(stem) + "__*.txt"):
             os.remove(sidecar)
     except Exception as e:
         logger.error(
