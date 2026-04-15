@@ -1,4 +1,3 @@
-from datetime import datetime
 import os
 from pathlib import Path
 
@@ -153,7 +152,6 @@ async def handle_inst_tick(message: types.Message, cfg):
         )
         return
 
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     loc_video = f"media/{user.id}/%(title)s.%(ext)s"
 
     ydl_opts = {
