@@ -164,10 +164,11 @@ class Bot_Func:
             await user_msg.reply(f"The video file does not exist. {loc_video=}")
             return
 
-        # Write sidecar .txt with download date
-        sidecar = os.path.splitext(loc_video)[0] + ".txt"
-        with open(sidecar, "w") as f:
-            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        # Write sidecar .txt named {title}__{date}.txt
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        stem = os.path.splitext(loc_video)[0]
+        sidecar = f"{stem}__{date_str}.txt"
+        open(sidecar, "w").close()
 
         self.log.info(f"File size: {ut.h_readable(os.path.getsize(loc_video))}")
 

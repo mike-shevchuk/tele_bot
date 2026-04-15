@@ -1,4 +1,5 @@
 from pathlib import Path
+import glob
 import pandas as pd
 import requests
 import os
@@ -245,9 +246,9 @@ def delete_video_file(file_path) -> None:
             logger.info(f"The file {file_path} has been deleted successfully.")
         else:
             logger.warning(f"The file {file_path} does not exist.")
-        # Also remove the sidecar .txt with download date if present
-        sidecar = os.path.splitext(file_path)[0] + ".txt"
-        if os.path.exists(sidecar):
+        # Also remove sidecar {stem}__{date}.txt if present
+        stem = os.path.splitext(file_path)[0]
+        for sidecar in glob.glob(f"{stem}__*.txt"):
             os.remove(sidecar)
     except Exception as e:
         logger.error(
