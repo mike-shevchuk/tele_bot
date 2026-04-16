@@ -43,6 +43,32 @@ class Bot_Func:
         self.log = log
         self.root_prj = root_prj
 
+    def _log_media_info(self, info: dict | None) -> str:
+        """Log codec/resolution/bitrate and return the same text for sidecar writing."""
+        if not info:
+            return ""
+        # For merged/remuxed formats the final stream data lives under
+        # requested_downloads[0]; fall back to top-level info_dict fields.
+        rd = (info.get("requested_downloads") or [{}])[0]
+        src = rd if rd else info
+
+        vcodec = src.get("vcodec") or info.get("vcodec", "?")
+        acodec = src.get("acodec") or info.get("acodec", "?")
+        width = src.get("width") or info.get("width")
+        height = src.get("height") or info.get("height")
+        fps = src.get("fps") or info.get("fps")
+        tbr = src.get("tbr") or info.get("tbr")  # total bitrate kbps
+        ext = src.get("ext") or info.get("ext", "?")
+        title = info.get("title", "")
+        url = info.get("webpage_url") or info.get("original_url", "")
+
+        res = f"{width}x{height}" if width and height else "?x?"
+        fps_str = f" @ {fps:.0f}fps" if fps else ""
+        tbr_str = f" | {tbr:.0f}kbps" if tbr else ""
+        line = f"🎬 {title!r} | {ext} | {vcodec} / {acodec} | {res}{fps_str}{tbr_str}"
+        self.log.info(line)
+        return "\n".join([line, f"url: {url}", f"title: {title}"])
+
     def extract_video_info(self, url):
         """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
@@ -76,6 +102,7 @@ class Bot_Func:
 
         strt_dwn_msg = None
         finished_file: str = ""
+        media_info: dict | None = None
         try:
             strt_dwn_msg = await user_msg.answer("Downloading... 0%\n⬜⬜⬜⬜⬜⬜⬜⬜")
             self.log.debug(f"Start download video {loc_video}")
@@ -133,11 +160,12 @@ class Bot_Func:
 
             def download():
                 with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
-                    ydl.download([med_url])
+                    return ydl.extract_info(med_url, download=True)
 
-            await asyncio.to_thread(download)
+            media_info = await asyncio.to_thread(download)
             await strt_dwn_msg.delete()
             self.log.success(f"✅ Download successful! {loc_video}")
+            self._log_media_info(media_info)
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
             if strt_dwn_msg:
@@ -182,9 +210,13 @@ class Bot_Func:
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         stem, _ = ut.parse_media_filename(loc_video)
         sidecar = f"{os.path.dirname(loc_video)}/{stem}__{date_str}.txt"
-        Path(sidecar).touch()
+        file_size = os.path.getsize(loc_video)
+        sidecar_text = self._log_media_info(media_info)
+        Path(sidecar).write_text(
+            sidecar_text + f"\nsize: {ut.h_readable(file_size)}\n", encoding="utf-8"
+        )
 
-        self.log.info(f"File size: {ut.h_readable(os.path.getsize(loc_video))}")
+        self.log.info(f"File size: {ut.h_readable(file_size)}")
 
         # TODO: show awailable limit for user
         # await message.answer(f'Твоє відео {tiktok_url}')
