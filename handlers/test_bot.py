@@ -393,3 +393,62 @@ async def cmd_review(message: types.Message, logger):
         f'Файл: {filename}\n'
         f'Результат зʼявиться на GitHub за кілька хвилин.'
     )
+
+
+@router.message(Command('check_pr'))
+async def cmd_check_pr(message: types.Message, logger):
+    caller = message.from_user
+    logger.info(f'/check_pr called by {caller.id} ({caller.full_name}): {message.text!r}')
+
+    user = await check_access(message, [Level.admin, Level.vip])
+    if not user:
+        return
+
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit() or int(args[1]) <= 0:
+        logger.warning(f'/check_pr bad args: {args}')
+        await message.reply('Формат: /check_pr <pr_number>')
+        return
+    pr_number = int(args[1])
+
+    today = datetime.now(timezone.utc).date()
+    queue_root = REVIEW_QUEUE_DIR.parent
+    records = []
+    for subdir in ('pending', 'processed'):
+        d = queue_root / subdir
+        if not d.exists():
+            continue
+        for f in sorted(d.glob('*.json')):
+            try:
+                data = json.loads(f.read_text())
+            except Exception:
+                continue
+            if data.get('pr_number') != pr_number or data.get('caller_id') != caller.id:
+                continue
+            rq_str = str(data.get('requested_at', '')).replace('Z', '+00:00')
+            try:
+                rq_dt = datetime.fromisoformat(rq_str)
+            except ValueError:
+                continue
+            if rq_dt.astimezone(timezone.utc).date() != today:
+                continue
+            records.append((subdir, data))
+
+    if not records:
+        await message.reply(f'Нема записів для PR #{pr_number} сьогодні від тебе.')
+        return
+
+    records.sort(key=lambda r: r[1].get('requested_at', ''))
+    icons = {'success': '✅', 'failed': '❌'}
+    lines = [f'📋 PR #{pr_number} сьогодні ({caller.full_name}) — {len(records)} запис(ів):', '']
+    for i, (state, data) in enumerate(records, 1):
+        status = data.get('status', state)
+        icon = icons.get(status, '⏳' if state == 'pending' else '⌛')
+        line = f'{i}. {icon} {status} | req={data.get("requested_at", "?")}'
+        if data.get('completed_at'):
+            line += f' | done={data["completed_at"]}'
+        if 'exit_code' in data:
+            line += f' | rc={data["exit_code"]}'
+        lines.append(line)
+
+    await message.reply('\n'.join(lines))
