@@ -6,7 +6,7 @@ import asyncio
 import html
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from aiogram.filters.command import Command
 from aiogram.utils.markdown import hide_link
@@ -353,7 +353,7 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
 
 
 @router.message(Command('review'))
-async def cmd_review(message: types.Message, logger, bot: Bot):
+async def cmd_review(message: types.Message, logger):
     caller = message.from_user
     logger.info(f'/review called by {caller.id} ({caller.full_name}): {message.text!r}')
 
@@ -368,7 +368,7 @@ async def cmd_review(message: types.Message, logger, bot: Bot):
         return
     pr_number = int(args[1])
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     payload = {
         'pr_number': pr_number,
         'caller_id': caller.id,
@@ -387,7 +387,7 @@ async def cmd_review(message: types.Message, logger, bot: Bot):
         await message.reply('❌ Не вдалося записати запит у чергу. Перевір логи.')
         return
 
-    logger.info(f'/review queued: {request_file}')
+    logger.info(f'/review queued payload={payload} file={request_file}')
     await message.reply(
         f'✅ Запит на review PR #{pr_number} поставлено в чергу.\n'
         f'Файл: {filename}\n'

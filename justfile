@@ -78,39 +78,65 @@ queue-watch:
         local file="$1"
         [[ "$file" != *.json ]] && return 0
         [[ ! -f "$file" ]] && return 0
-        local pr caller ts
+
+        local base pr caller caller_id ts
+        base=$(basename "$file")
+        echo "──────────────────────────────────────────"
+        echo "[$(date +'%F %T')] 📨 picking up $base"
+        echo "[$(date +'%F %T')] 📄 content:"
+        jq . "$file" 2>/dev/null | sed 's/^/     /' || echo "     (invalid JSON)"
+
         pr=$(jq -r '.pr_number // empty' "$file" 2>/dev/null)
         caller=$(jq -r '.caller_full_name // "unknown"' "$file" 2>/dev/null)
+        caller_id=$(jq -r '.caller_id // "?"' "$file" 2>/dev/null)
         ts=$(jq -r '.requested_at // "?"' "$file" 2>/dev/null)
+
         if [[ ! "$pr" =~ ^[0-9]+$ ]]; then
-            echo "[$(date +'%F %T')] ⚠️  SKIP bad pr in $(basename "$file")"
-            mv "$file" "$processed/bad-$(basename "$file")"
+            echo "[$(date +'%F %T')] ⚠️  SKIP: pr_number=$pr is not a positive integer"
+            mv "$file" "$processed/bad-$base"
+            echo "[$(date +'%F %T')] 🗂  moved → processed/bad-$base"
             return 0
         fi
-        echo "[$(date +'%F %T')] ▶  pr=$pr caller=$caller requested=$ts"
+
+        echo "[$(date +'%F %T')] ▶  pr=$pr caller=$caller(id=$caller_id) requested=$ts"
         local s="review-pr-$pr"
+
+        # Dedup: if a review for this PR is already running, DO NOT kill it —
+        # keep the request file for retry (queue it back).
+        if tmux has-session -t "$s" 2>/dev/null; then
+            echo "[$(date +'%F %T')] ⏳ session '$s' already running — requeuing $base for later"
+            local stamp=$(date +%s)
+            mv "$file" "$pending/$stamp-$base"
+            return 0
+        fi
+
         local logdir="/tmp/tele-bot-review-queue/logs"
         local log="$logdir/pr-$pr-$(date +%Y%m%dT%H%M%S).log"
         mkdir -p "$logdir"
-        tmux kill-session -t "$s" 2>/dev/null || true
-        # Output from claude is tee'd to $log so we can diagnose later even if
-        # the tmux scrollback is lost. Exit code of claude is preserved.
+        echo "[$(date +'%F %T')] 📝 log → $log"
+        echo "[$(date +'%F %T')] 🚀 spawning tmux session '$s' (attach: tmux attach -t $s)"
+
+        # Tee claude output to $log so diagnosis works even if scrollback is lost.
         if tmux new-session -d -s "$s" \
             "exec > >(tee -a '$log') 2>&1; \
-             echo '=== $(date +%FT%T) /review-pr-ukr $pr ==='; \
-             echo 'which claude:'; which claude || echo '  (not in PATH)'; \
+             echo '=== $(date +%FT%T) /review-pr-ukr $pr (requested by $caller id=$caller_id) ==='; \
+             echo 'which claude:'; which claude || echo '  ❌ claude NOT in PATH'; \
+             echo 'claude --version:'; claude --version 2>/dev/null || true; \
+             echo 'PWD:' \$(pwd); \
              echo; \
+             echo '──── claude output ────'; \
              claude --print '/review-pr-ukr $pr'; \
              rc=\$?; \
-             echo; echo \"=== claude exit=\$rc ===\"; \
-             echo '✅ Session closes in 10 min...'; \
+             echo; echo \"──── claude exit=\$rc ────\"; \
+             echo '✅ Done. Session closes in 10 min...'; \
              sleep 600"
         then
-            echo "[$(date +'%F %T')] ✅ tmux session '$s' started, log=$log"
+            echo "[$(date +'%F %T')] ✅ tmux session '$s' started"
+            mv "$file" "$processed/$base"
+            echo "[$(date +'%F %T')] 🗂  moved → processed/$base"
         else
-            echo "[$(date +'%F %T')] ❌ failed to start tmux session '$s'"
+            echo "[$(date +'%F %T')] ❌ failed to start tmux session '$s' — keeping $base for retry"
         fi
-        mv "$file" "$processed/$(basename "$file")"
     }
 
     echo "[$(date +'%F %T')] 🛰  queue-watch started ($pending)"
