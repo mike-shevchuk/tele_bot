@@ -4,13 +4,18 @@ from aiogram.types import Message
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
 import html
+import json
 import time
+from datetime import datetime
+from pathlib import Path
 from aiogram.filters.command import Command
 from aiogram.utils.markdown import hide_link
 from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
+
+REVIEW_QUEUE_DIR = Path('/tmp/tele-bot-review-queue/pending')
 
 _last_query_time: dict[int, float] = {}
 
@@ -361,49 +366,30 @@ async def cmd_review(message: types.Message, logger, bot: Bot):
         logger.warning(f'/review bad args: {args}')
         await message.reply('Формат: /review <pr_number>')
         return
-    pr_number = args[1]
-    session_name = f'review-pr-{pr_number}'
+    pr_number = int(args[1])
 
-    logger.info(f'/review spawning `just review {pr_number}` for {caller.id}')
-    await message.reply(f'🔍 Запускаю review для PR #{pr_number}...')
+    now = datetime.now()
+    payload = {
+        'pr_number': pr_number,
+        'caller_id': caller.id,
+        'caller_username': caller.username,
+        'caller_full_name': caller.full_name,
+        'requested_at': now.isoformat(timespec='seconds'),
+    }
+    filename = f'pr-{pr_number}-{now.strftime("%Y%m%dT%H%M%S")}-{caller.id}.json'
+    request_file = REVIEW_QUEUE_DIR / filename
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            'just', 'review', pr_number,
-            cwd=str(ut.root_prj),
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=15)
-    except asyncio.TimeoutError:
-        logger.warning(f'/review spawn timed out for PR #{pr_number}')
-        await message.reply('⚠️ Запуск тайм-аут. Перевір tmux сесію вручну на сервері.')
-        return
-    except FileNotFoundError:
-        logger.exception('/review `just` not found in PATH')
-        await message.reply('❌ `just` не знайдено в PATH сервера.')
-        return
+        REVIEW_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        request_file.write_text(json.dumps(payload, ensure_ascii=False))
     except Exception:
-        logger.exception(f'/review failed to spawn just review {pr_number}')
-        await message.reply('❌ Не вдалося запустити review. Перевір логи сервера.')
+        logger.exception(f'/review failed to write queue file {request_file}')
+        await message.reply('❌ Не вдалося записати запит у чергу. Перевір логи.')
         return
 
-    check = await asyncio.create_subprocess_exec(
-        'tmux', 'has-session', '-t', session_name,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    await check.wait()
-    if check.returncode != 0:
-        logger.warning(f'/review tmux session `{session_name}` not running after spawn')
-        await message.reply(
-            f'⚠️ Сесія `{session_name}` не створилась. Перевір логи сервера.'
-        )
-        return
-
-    logger.info(f'/review tmux session `{session_name}` started for PR #{pr_number}')
+    logger.info(f'/review queued: {request_file}')
     await message.reply(
-        f'✅ Review для PR #{pr_number} запущено в tmux (`{session_name}`).\n'
-        f'Результат зʼявиться на GitHub через кілька хвилин.'
+        f'✅ Запит на review PR #{pr_number} поставлено в чергу.\n'
+        f'Файл: {filename}\n'
+        f'Результат зʼявиться на GitHub за кілька хвилин.'
     )
