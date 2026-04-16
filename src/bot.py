@@ -69,6 +69,63 @@ class Bot_Func:
         self.log.info(line)
         return "\n".join([line, f"url: {url}", f"title: {title}"])
 
+    # Codecs natively supported on Apple (iOS / macOS / Safari)
+    _APPLE_VCODECS = (
+        "avc",
+        "h264",
+        "hvc",
+        "hevc",
+        "h265",
+        "av1",
+    )  # av1 on newer devices
+
+    async def _ensure_h264(self, path: str, media_info: dict | None, user_msg) -> str:
+        """Transcode to H.264/AAC if the video codec is not Apple-compatible."""
+        if not media_info:
+            return path
+        rd = (media_info.get("requested_downloads") or [{}])[0]
+        vcodec = ((rd.get("vcodec") or media_info.get("vcodec")) or "").lower()
+        if not vcodec or vcodec.startswith(self._APPLE_VCODECS):
+            return path  # already fine
+
+        self.log.warning(
+            f"⚠️ Codec {vcodec!r} not Apple-compatible — transcoding to H.264"
+        )
+        try:
+            await user_msg.answer("⚙️ Converting to H.264 for Apple compatibility…")
+        except Exception:
+            pass
+
+        out_path = os.path.splitext(path)[0] + ".h264.mp4"
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-y",
+            "-i",
+            path,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            out_path,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            self.log.error(f"Transcode failed: {stderr.decode()[-500:]}")
+            return path  # send original, let the caller deal with it
+        os.remove(path)
+        self.log.success(f"✅ Transcoded to H.264: {out_path}")
+        return out_path
+
     def extract_video_info(self, url):
         """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
@@ -205,6 +262,9 @@ class Bot_Func:
             await user_msg.reply(f"Download finished but file not found. {loc_video=}")
             return
         loc_video = resolved
+
+        # Transcode to H.264 if codec is not Apple-compatible (VP9, AV1, etc.)
+        loc_video = await self._ensure_h264(loc_video, media_info, user_msg)
 
         # Write sidecar .txt named {title}__{date}.txt
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
