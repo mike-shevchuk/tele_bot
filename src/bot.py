@@ -89,6 +89,13 @@ class Bot_Func:
                 except Exception:
                     pass
 
+            def pp_hook(d):
+                nonlocal finished_file
+                if d["status"] == "finished":
+                    fp = d.get("info_dict", {}).get("filepath", "")
+                    if fp:
+                        finished_file = fp
+
             def progress_hook(d):
                 nonlocal finished_file
                 if d["status"] == "finished":
@@ -118,7 +125,11 @@ class Bot_Func:
                 except Exception:
                     pass
 
-            ydl_opts_with_hook = {**ydl_opts, "progress_hooks": [progress_hook]}
+            ydl_opts_with_hook = {
+                **ydl_opts,
+                "progress_hooks": [progress_hook],
+                "postprocessor_hooks": [pp_hook],
+            }
 
             def download():
                 with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
@@ -140,23 +151,32 @@ class Bot_Func:
             await user_msg.reply(f"An error occurred: {e}")
             return
 
-        # Resolve actual file path: prefer hook-captured name, fall back to glob
+        # Resolve actual file path: prefer postprocessor-hook result, then
+        # progress-hook result, then glob fallback.
+        resolved: str = ""
         if finished_file and os.path.exists(finished_file):
-            loc_video = finished_file
+            resolved = finished_file
         else:
             base_path = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
-            if not base_path or base_path.endswith("/"):
-                await user_msg.reply(
-                    f"Download finished but file not found. {loc_video=}"
-                )
-                return
-            loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
-            if not loc_match:
-                await user_msg.reply(
-                    f"Download finished but file not found. {loc_video=}"
-                )
-                return
-            loc_video = loc_match[0]
+            if base_path.endswith("/"):
+                # Template was directory-only — pick newest non-part file in dir
+                candidates = [
+                    f
+                    for f in glob.glob(os.path.join(base_path, "*"))
+                    if not f.endswith(".part") and os.path.isfile(f)
+                ]
+                if candidates:
+                    resolved = max(candidates, key=os.path.getmtime)
+            elif base_path:
+                loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
+                if loc_match:
+                    resolved = loc_match[0]
+
+        if not resolved:
+            self.log.error(f"Download finished but file not found. {loc_video=}")
+            await user_msg.reply(f"Download finished but file not found. {loc_video=}")
+            return
+        loc_video = resolved
 
         # Write sidecar .txt named {title}__{date}.txt
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
