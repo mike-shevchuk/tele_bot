@@ -117,6 +117,9 @@ queue-watch:
         echo "[$(date +'%F %T')] 🚀 spawning tmux session '$s' (attach: tmux attach -t $s)"
 
         # Tee claude output to $log so diagnosis works even if scrollback is lost.
+        # --verbose makes claude print each agent turn (tool uses, thinking, etc).
+        # A background heartbeat keeps the session alive-looking during long pauses.
+        # awk prefixes every line with a timestamp so you see progress in real time.
         if tmux new-session -d -s "$s" \
             "exec > >(tee -a '$log') 2>&1; \
              echo '=== $(date +%FT%T) /review-pr-ukr $pr (requested by $caller id=$caller_id) ==='; \
@@ -124,9 +127,11 @@ queue-watch:
              echo 'claude --version:'; claude --version 2>/dev/null || true; \
              echo 'PWD:' \$(pwd); \
              echo; \
-             echo '──── claude output ────'; \
-             claude --print '/review-pr-ukr $pr'; \
-             rc=\$?; \
+             echo '──── claude output (verbose) ────'; \
+             ( while sleep 20; do echo \"[\$(date +'%F %T')] ⏳ still working...\"; done ) & HB=\$!; \
+             claude --verbose --print '/review-pr-ukr $pr' 2>&1 | awk '{ print strftime(\"[%F %T]\"), \$0; fflush() }'; \
+             rc=\${PIPESTATUS[0]}; \
+             kill \$HB 2>/dev/null; wait \$HB 2>/dev/null; \
              echo; echo \"──── claude exit=\$rc ────\"; \
              echo '✅ Done. Session closes in 10 min...'; \
              sleep 600"
