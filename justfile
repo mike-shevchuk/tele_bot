@@ -120,6 +120,8 @@ queue-watch:
         # --verbose makes claude print each agent turn (tool uses, thinking, etc).
         # A background heartbeat keeps the session alive-looking during long pauses.
         # awk prefixes every line with a timestamp so you see progress in real time.
+        # When claude exits, jq stamps completion info into the processed JSON.
+        local pfile="$processed/$base"
         if tmux new-session -d -s "$s" \
             "exec > >(tee -a '$log') 2>&1; \
              echo '=== $(date +%FT%T) /review-pr-ukr $pr (requested by $caller id=$caller_id) ==='; \
@@ -133,6 +135,11 @@ queue-watch:
              rc=\${PIPESTATUS[0]}; \
              kill \$HB 2>/dev/null; wait \$HB 2>/dev/null; \
              echo; echo \"──── claude exit=\$rc ────\"; \
+             jq --arg ts \"\$(date -u +%FT%TZ)\" --argjson rc \$rc --arg log '$log' \
+                '. + {completed_at: \$ts, exit_code: \$rc, status: (if \$rc == 0 then \"success\" else \"failed\" end), log_file: \$log}' \
+                '$pfile' > '$pfile.tmp' && mv '$pfile.tmp' '$pfile' \
+                && echo \"📋 status written to $pfile\" \
+                || echo \"⚠️  failed to update $pfile\"; \
              echo '✅ Done. Session closes in 10 min...'; \
              sleep 600"
         then
