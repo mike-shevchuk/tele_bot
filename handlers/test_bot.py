@@ -347,7 +347,7 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
 
 @router.message(Command('setlevel'))
-async def cmd_setlevel(message: types.Message, logger, cfg, bot: Bot):
+async def cmd_setlevel(message: types.Message, logger, bot: Bot):
     user = await check_access(message, [Level.admin])
     if not user:
         return
@@ -363,18 +363,20 @@ async def cmd_setlevel(message: types.Message, logger, cfg, bot: Bot):
             target_id = int(args[1]) 
         except ValueError:
             await message.reply("❌ user_id має бути числом")
+            return
 
         target_new_level = args[2]
         target_df=ut.get_user_by_id(target_id)
-        target_user=ut.pandas2pydentic(target_df)
 
         if target_df.empty:
                 await message.reply('Незнайдено вказаного користувача')
                 return
         
+        target_user=ut.pandas2pydentic(target_df)
         target_user.level = Level[target_new_level]
         ut.update_row(target_user)
         await bot.send_message(target_id, f'Твій новий level: {target_user.level}.')
+        await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
 
     except Exception as e:
         logger.exception(f"Проблема в /setlevel: {e}")
