@@ -363,7 +363,7 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
             await message.reply("❌ user_id має бути числом")
             return
 
-        target_new_level = args[2] \
+        target_new_level = args[2] 
         
         target_df=ut.get_user_by_id(target_id)
 
@@ -388,4 +388,6 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
     except Exception as e:
         logger.exception(f"Проблема в /setlevel: {e}")
         await message.reply("❌ Виникла несподівана помилка")
+
+
     
