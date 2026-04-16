@@ -89,11 +89,24 @@ queue-watch:
         fi
         echo "[$(date +'%F %T')] ▶  pr=$pr caller=$caller requested=$ts"
         local s="review-pr-$pr"
+        local logdir="/tmp/tele-bot-review-queue/logs"
+        local log="$logdir/pr-$pr-$(date +%Y%m%dT%H%M%S).log"
+        mkdir -p "$logdir"
         tmux kill-session -t "$s" 2>/dev/null || true
+        # Output from claude is tee'd to $log so we can diagnose later even if
+        # the tmux scrollback is lost. Exit code of claude is preserved.
         if tmux new-session -d -s "$s" \
-            "claude --print '/review-pr-ukr $pr'; echo; echo '✅ Done. Session closes in 10 min...'; sleep 600"
+            "exec > >(tee -a '$log') 2>&1; \
+             echo '=== $(date +%FT%T) /review-pr-ukr $pr ==='; \
+             echo 'which claude:'; which claude || echo '  (not in PATH)'; \
+             echo; \
+             claude --print '/review-pr-ukr $pr'; \
+             rc=\$?; \
+             echo; echo \"=== claude exit=\$rc ===\"; \
+             echo '✅ Session closes in 10 min...'; \
+             sleep 600"
         then
-            echo "[$(date +'%F %T')] ✅ tmux session '$s' started"
+            echo "[$(date +'%F %T')] ✅ tmux session '$s' started, log=$log"
         else
             echo "[$(date +'%F %T')] ❌ failed to start tmux session '$s'"
         fi
