@@ -28,7 +28,7 @@ fmt-check:
 lint-file file:
     ruff check --select E9,F63,F7,F82 {{file}}
 
-# Run full CI check locally (lint + import check)
+# Run full CI check locally (ruff does syntax + lint in one pass)
 ci:
     #!/usr/bin/env bash
     echo "=== Ruff: blocking errors ==="
@@ -36,23 +36,6 @@ ci:
     echo ""
     echo "=== Ruff: all warnings ==="
     ruff check . || true
-    echo ""
-    echo "=== Import check ==="
-    python3 -c "
-import ast, sys, pathlib
-errors = []
-for p in pathlib.Path('.').rglob('*.py'):
-    if any(part in p.parts for part in ['.venv', '__pycache__', '.git']):
-        continue
-    try:
-        ast.parse(p.read_text())
-    except SyntaxError as e:
-        errors.append(f'{p}:{e}')
-if errors:
-    print('\\n'.join(errors)); sys.exit(1)
-else:
-    print('✅ All modules parse OK')
-"
 
 # Review a PR with Ukrainian beginner-friendly review
 # Usage:
