@@ -362,7 +362,7 @@ async def cmd_review(message: types.Message, logger):
         return
 
     args = message.text.split()
-    if len(args) != 2 or not args[1].isdigit():
+    if len(args) != 2 or not args[1].isdigit() or int(args[1]) <= 0:
         logger.warning(f'/review bad args: {args}')
         await message.reply('Формат: /review <pr_number>')
         return
