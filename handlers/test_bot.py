@@ -345,3 +345,65 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
+
+
+@router.message(Command('review'))
+async def cmd_review(message: types.Message, logger, bot: Bot):
+    caller = message.from_user
+    logger.info(f'/review called by {caller.id} ({caller.full_name}): {message.text!r}')
+
+    user = await check_access(message, [Level.admin, Level.vip])
+    if not user:
+        return
+
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit():
+        logger.warning(f'/review bad args: {args}')
+        await message.reply('Формат: /review <pr_number>')
+        return
+    pr_number = args[1]
+    session_name = f'review-pr-{pr_number}'
+
+    logger.info(f'/review spawning `just review {pr_number}` for {caller.id}')
+    await message.reply(f'🔍 Запускаю review для PR #{pr_number}...')
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            'just', 'review', pr_number,
+            cwd=str(ut.root_prj),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=15)
+    except asyncio.TimeoutError:
+        logger.warning(f'/review spawn timed out for PR #{pr_number}')
+        await message.reply('⚠️ Запуск тайм-аут. Перевір tmux сесію вручну на сервері.')
+        return
+    except FileNotFoundError:
+        logger.exception('/review `just` not found in PATH')
+        await message.reply('❌ `just` не знайдено в PATH сервера.')
+        return
+    except Exception:
+        logger.exception(f'/review failed to spawn just review {pr_number}')
+        await message.reply('❌ Не вдалося запустити review. Перевір логи сервера.')
+        return
+
+    check = await asyncio.create_subprocess_exec(
+        'tmux', 'has-session', '-t', session_name,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await check.wait()
+    if check.returncode != 0:
+        logger.warning(f'/review tmux session `{session_name}` not running after spawn')
+        await message.reply(
+            f'⚠️ Сесія `{session_name}` не створилась. Перевір логи сервера.'
+        )
+        return
+
+    logger.info(f'/review tmux session `{session_name}` started for PR #{pr_number}')
+    await message.reply(
+        f'✅ Review для PR #{pr_number} запущено в tmux (`{session_name}`).\n'
+        f'Результат зʼявиться на GitHub через кілька хвилин.'
+    )
