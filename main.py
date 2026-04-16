@@ -1,4 +1,3 @@
-from datetime import datetime
 import os
 from pathlib import Path
 
@@ -6,223 +5,203 @@ import asyncio
 from dotenv import load_dotenv
 import pandas as pd
 import loguru
-from pprint import pprint
 
 from src.Users import UserTele
 from src.bot import Bot_Func
 from src import utils as ut
 import jinja2
 
-from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.types.user import User as TgUser
 from src.MiddleWare import SharedContextMiddleware
 from handlers import test_bot, media_bot, voice_stt
-
-# from aiogram.filters import Text
-
-from src.Users import UserTele
-from src.bot import Bot_Func
-from src import utils as ut
-from src.bot import CommonParamYouTube
 
 import glob
 
 user_data = {}
 load_dotenv()
 
-API_TOKEN = os.getenv('TOKEN')
+API_TOKEN = os.getenv("TOKEN")
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
 # BOT_NAME = 'med_soc_bot'
 
+
 @dp.message(Command("start"))
-async def start_user(message:types.Message):
-    users_reg_df: pd.DataFrame  = ut.get_reg_users()
+async def start_user(message: types.Message):
+    users_reg_df: pd.DataFrame = ut.get_reg_users()
     user_org: TgUser = message.from_user
 
     try:
         usr = UserTele(
-            id = user_org.id,
+            id=user_org.id,
             # chat_id = user.chat_id,
-            first_name = user_org.first_name,
-            full_name = user_org.full_name,
-            username = user_org.username,
-            is_bot = user_org.is_bot,
-            is_premium = user_org.is_premium,
-            language_code = user_org.language_code,
-            last_name = user_org.last_name
+            first_name=user_org.first_name,
+            full_name=user_org.full_name,
+            username=user_org.username,
+            is_bot=user_org.is_bot,
+            is_premium=user_org.is_premium,
+            language_code=user_org.language_code,
+            last_name=user_org.last_name,
         )
     except Exception as e:
-        logger.exception(f'Except user reg {e}')
+        logger.exception(f"Except user reg {e}")
 
     user = ut.get_user_by_id(usr.id)
 
     if user.empty:
         df = ut.pydantic2pandas(usr)
-        all_df = pd.concat([users_reg_df, df])   #.reset_index(drop=True)
+        all_df = pd.concat([users_reg_df, df])  # .reset_index(drop=True)
         ut.save_reg_user(all_df)
-        logger.debug(f'Add new user {usr.id} {ut.get_name_from_pydantic(usr)}')
-        await message.answer(f'Все готово. Гарного користування!')
+        logger.debug(f"Add new user {usr.id} {ut.get_name_from_pydantic(usr)}")
+        await message.answer("Все готово. Гарного користування!")
     else:
-        await message.answer(f'Скучали за тобою {usr.id}')
-        return 
+        await message.answer(f"Скучали за тобою {usr.id}")
+        return
 
 
-@dp.message(lambda msg: msg.text and any(link in msg.text for link in ['youtu.be', 'youtube.com']))
-async def cmd_numbers(message: types.Message, cfg):
+@dp.message(
+    lambda msg: msg.text
+    and not msg.via_bot
+    and any(link in msg.text for link in ["youtu.be", "youtube.com"])
+)
+async def cmd_numbers(message: types.Message):
     user_bot = message.from_user
     link = ut.expand_url(message.text)
-    link = link.split('&list')[0]
-    logger.info(f'{link=}')
+    link = link.split("&list")[0]
+    logger.info(f"{link=}")
     df_t = ut.get_user_by_id(user_bot.id)
 
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
     available_memory = user.level.value - user.use_memory
-    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(available_memory)=}')
+    logger.info(
+        f"User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(available_memory)=}"
+    )
 
     if available_memory < 0:
-        await message.reply(f"Ви використали свій ліміт({ut.h_readable(user.level.value)})"+
-                             f" на цей місяць, підніміть свій статус")
+        await message.reply(
+            f"Ви використали свій ліміт({ut.h_readable(user.level.value)})"
+            + " на цей місяць, підніміть свій статус"
+        )
         return
 
-    # If the message came via inline bot, auto-download best quality
-    if message.via_bot:
-        logger.info(f'Inline YouTube download for {user.id}: {link}')
-        environment = jinja2.Environment()
-        answer_template = environment.from_string(
-            "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
-        )
-
-        current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        loc_video = f"media/{user.id}/{current_date}"
-        ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
-            'outtmpl': loc_video,
-        }
-
-        res = await bot_func.get_dwn_media(ydl_opts, message, youtubeLink=link)
-        if not res:
-            await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
-            logger.warning(f'Failed to download inline YouTube video {link}\n\n\n')
-            return
-        loc_video, file_size = res
-
-        available_memory -= file_size
-        total_mem_user_level = user.level.value
-        used_memory_per_user = user.use_memory
-
-        answer_cap = answer_template.render(
-            bot_name=cfg.shared_vars.bot_name,
-            avail_mem=ut.h_readable(available_memory),
-            progress_bar_str_value=ut.progress_bar_str(used_memory_per_user, total_mem_user_level),
-            url=link,
-        )
-
-        try:
-            await message.answer_video(
-                video=types.FSInputFile(loc_video), caption=answer_cap
-            )
-        except Exception as e:
-            await message.reply(f"An error occurred while sending the video: {e}")
-        user.use_memory += file_size
-        loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
-        assert loc_match
-        loc_video = loc_match[0]
-        ut.update_row(user)
-        ut.delete_video_file(loc_video)
-        return
-
-    wait_bot_msg = await message.reply(f"Твоя лінка на youtube повідомлення опрацьовується!\
-                                        У тебе лишилося {ut.h_readable(available_memory)}", disable_notification=True)
-    logger.success(f'Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}')
+    wait_bot_msg = await message.reply(
+        f"Твоя лінка на youtube повідомлення опрацьовується!\
+                                        У тебе лишилося {ut.h_readable(available_memory)}",
+        disable_notification=True,
+    )
+    logger.success(
+        f"Хапнули лінку {link} --> {user.id} {ut.get_name_from_pydantic(user)}"
+    )
     user_data[message.from_user.id] = link  # Save the link to user_data
     res = bot_func.get_keyboard(link)
     if not res:
-        await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
-        logger.warning(f'Failed to download media formats with link {message.text}\n\n\n')
+        await message.answer(
+            "Не вдалося завантажити. Перевір посилання і спробуй ще раз."
+        )
+        logger.warning(
+            f"Failed to download media formats with link {message.text}\n\n\n"
+        )
         return
 
-
     yt_info, all_butons = res
-    video_name = yt_info['title']
-    id_video = yt_info['id']
+    video_name = yt_info["title"]
+    id_video = yt_info["id"]
     await message.reply(
-                        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n" +
-                        f"Vidoe --> {video_name}\nId --> {id_video} \n" +
-                        f"У тебе лишилося {ut.h_readable(available_memory)}",
-                        reply_markup=all_butons)
+        f"Яке хочете розширення? \n {link}\n повідомлення {user.full_name} \n\n"
+        + f"Vidoe --> {video_name}\nId --> {id_video} \n"
+        + f"У тебе лишилося {ut.h_readable(available_memory)}",
+        reply_markup=all_butons,
+    )
     # await message.delete()
     await wait_bot_msg.delete()
 
 
-
-@dp.message(lambda msg: msg.text and any(soc in msg.text for soc in ['instagram.com', 'tiktok.com']))
+@dp.message(
+    lambda msg: msg.text
+    and not msg.via_bot
+    and any(soc in msg.text for soc in ["instagram.com", "tiktok.com"])
+)
 async def handle_inst_tick(message: types.Message, cfg):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
-
 
     environment = jinja2.Environment()
     answer_template = environment.from_string(
         "@{{bot_name}}\n\nУ тебе лишилося {{avail_mem}}\n\n{{progress_bar_str_value}}\n\n{{url}}"
     )
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
-    
+
     user = ut.pandas2pydentic(df_t)
     availMemory = user.level.value - user.use_memory
-    logger.info(f'User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(availMemory)=}')
+    logger.info(
+        f"User {user.id} {ut.get_name_from_pydantic(user)} has {ut.h_readable(availMemory)=}"
+    )
     if availMemory < 0:
         await message.reply(
-            f"Ви використали свій ліміт({ut.h_readable(user.level.value)}) на цей місяць,"+
-              f"підніміть свій статус"
-            )
+            f"Ви використали свій ліміт({ut.h_readable(user.level.value)}) на цей місяць,"
+            + "підніміть свій статус"
+        )
         return
 
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_video = f"media/{user.id}/{current_date}"
+    loc_video = f"media/{user.id}/%(title)s.%(ext)s"
 
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': loc_video,
+        # Prefer H.264 + AAC. format_sort ranks h264 highest so the
+        # bestvideo fallback also picks H.264 when available.
+        # _ensure_h264() transcodes as a last resort if only VP9/AV1 exist.
+        "format": (
+            "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/bestvideo+bestaudio/best"
+        ),
+        "format_sort": ["vcodec:h264"],
+        "merge_output_format": "mp4",
+        "outtmpl": loc_video,
     }
 
     res = await bot_func.get_dwn_media(ydl_opts, message)
     if not res:
-        await message.answer('Не вдалося завантажити. Перевір посилання і спробуй ще раз.')
-        logger.warning(f'Failed to download media user {user.id} {ut.get_name_from_pydantic(user)} with link {message.text}\n\n\n')
+        await message.answer(
+            "Не вдалося завантажити. Перевір посилання і спробуй ще раз."
+        )
+        logger.warning(
+            f"Failed to download media user {user.id} {ut.get_name_from_pydantic(user)} with link {message.text}\n\n\n"
+        )
         return
     loc_video, file_size = res
-
 
     availMemory -= file_size
     total_mem_user_level = user.level.value
     used_memory_per_user = user.use_memory
 
     answer_cap = answer_template.render(
-        bot_name = cfg.shared_vars.bot_name, 
-        avail_mem = ut.h_readable(availMemory),
-        progress_bar_str_value = ut.progress_bar_str(used_memory_per_user, total_mem_user_level),
-        url = message.text
+        bot_name=cfg.shared_vars.bot_name,
+        avail_mem=ut.h_readable(availMemory),
+        progress_bar_str_value=ut.progress_bar_str(
+            used_memory_per_user, total_mem_user_level
+        ),
+        url=message.text,
     )
-    
+
     try:
-        await message.answer_video(video=types.FSInputFile(loc_video), 
-                                   caption=answer_cap)
+        await message.answer_video(
+            video=types.FSInputFile(loc_video), caption=answer_cap
+        )
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
     user.use_memory += file_size
-    loc_match = glob.glob(os.path.join('.', f'{loc_video}*'))
+    loc_match = glob.glob(os.path.join(".", f"{loc_video}*"))
     assert loc_match
-    loc_video  = loc_match[0]
+    loc_video = loc_match[0]
     ut.update_row(user)
     ut.delete_video_file(loc_video)
 
@@ -230,28 +209,30 @@ async def handle_inst_tick(message: types.Message, cfg):
 async def main():
     root_prj = Path(__file__).parent.absolute()
     # os.remove(root_prj / 'data' / 'reg_user.csv' )
-    cfg = ut.load_config('configs/cfg.yml')
+    cfg = ut.load_config("configs/cfg.yml")
     global logger
     logger = ut.setup_logger(loguru.logger)
-    logger.info('Logger setuped')
-    #HACK: delete in future
+    logger.info("Logger setuped")
+    # HACK: delete in future
     global bot_func
     bot_func = Bot_Func(log=logger, root_prj=root_prj)
-    logger.info('Bot Func setuped')
+    logger.info("Bot Func setuped")
     sharedContextMiddleware = SharedContextMiddleware(
-        logger=logger, foo = 42,bar = "Bazz", bot_func=bot_func, user_data=user_data, cfg=cfg
+        logger=logger,
+        foo=42,
+        bar="Bazz",
+        bot_func=bot_func,
+        user_data=user_data,
+        cfg=cfg,
     )
     # dp.message.middleware(sharedContextMiddleware)
     dp.update.middleware(sharedContextMiddleware)
-    
+
     dp.include_routers(test_bot.router, media_bot.router_med, voice_stt.router_stt)
     await dp.start_polling(bot)
 
 
-
-
-
 if __name__ == "__main__":
-    print('The project path ' + str(ut.get_prj_root()))
+    print("The project path " + str(ut.get_prj_root()))
     asyncio.run(main())
     # executor.start_polling(dp, loop=loop, skip_updates=True)

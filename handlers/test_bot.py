@@ -1,50 +1,20 @@
-from aiogram import F, Bot, Dispatcher, types, Router
+from aiogram import Bot, types, Router
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
-from uuid import uuid4
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
+import asyncio
 import html
+import time
 from aiogram.filters.command import Command
-from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.markdown import hide_link
-from aiogram.fsm.storage.memory import MemoryStorage
-from src.bot import CommonParamYouTube
-from src.MiddleWare import SharedContextMiddleware
+from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
 
-
-
-class CommonParamTick(CallbackData, prefix="tick"):
-    # id: str
-    title: str
-    vid_data: str
+_last_query_time: dict[int, float] = {}
 
 router = Router()
-# router.message.middleware(SharedContextMiddleware())
-
-
-# @router.inline_query()
-# async def inline_query_handler(inline_query: types.InlineQuery, logger):
-#     logger.trace('Inline  MOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOD')
-#     article = InlineQueryResultArticle(
-#         id=uuid4().hex,
-#         title="Check my profile",
-#         input_message_content=InputTextMessageContent(message_text="Check my profile by button bellow:"),
-#         article = InlineQueryResultArticle(
-#             id=uuid4().hex,
-#             title="Check my profile",
-#             input_message_content=InputTextMessageContent(message_text="Check my profile by button bellow:"),
-#             reply_markup=InlineKeyboardMarkup(
-#                 inline_keyboard=[[
-#                     InlineKeyboardButton(text="text")
-#                 ]]
-#             )
-#         )
-#     )
-#     await inline_query.answer(results=[article])
-#     ...
 
 async def check_access(message: types.Message, allowed_levels: list[Level]):
     user_bot = message.from_user
@@ -55,82 +25,142 @@ async def check_access(message: types.Message, allowed_levels: list[Level]):
         return None
     return user
 
+def _fmt_duration(secs):
+    if not secs:
+        return ''
+    m, s = divmod(int(secs), 60)
+    return f'{m}:{s:02d}'
+
+
+def _fmt_views(count):
+    if not count:
+        return ''
+    if count >= 1_000_000:
+        return f'{count / 1_000_000:.1f}M views'
+    if count >= 1_000:
+        return f'{count / 1_000:.1f}K views'
+    return f'{count} views'
+
+
 @router.inline_query()
-async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func):
+async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func, user_data):
     query = inline_query.query.strip()
+    user_id = inline_query.from_user.id
     logger.trace(f'Inline Query: {query=}')
+
+    if query:
+        now = time.time()
+        _last_query_time[user_id] = now
+        await asyncio.sleep(1)
+        if _last_query_time.get(user_id) != now:
+            return
+        # Bound the debounce dict
+        if len(_last_query_time) > 1000:
+            cutoff = now - 300
+            for uid in [k for k, v in _last_query_time.items() if v < cutoff]:
+                _last_query_time.pop(uid, None)
 
     articles = []
 
-    if query.startswith('ssoc ') and len(query) > 5:
-        search_text = query[5:].strip()
-        if not search_text:
-            await inline_query.answer(results=[], cache_time=10)
-            return
+    if any(domain in query for domain in ['tiktok.com', 'instagram.com']):
+        link = query
+        label = 'TikTok' if 'tiktok.com' in link else 'Instagram'
 
-        logger.info(f'YouTube search via inline: {search_text}')
-        entries = bot_func.search_youtube(search_text, max_results=5)
+        key = f"inl_{user_id}_social"
+        user_data[key] = {'url': link, 'mode': 'social', 'title': ''}
+        cb = CommonParamInline(key=key)
 
-        for i, entry in enumerate(entries):
-            title = entry.get('title', 'No title')
-            channel = entry.get('channel', entry.get('uploader', 'Unknown'))
-            duration = entry.get('duration')
-            video_url = entry.get('url', '')
-
-            duration_str = ''
-            if duration:
-                mins, secs = divmod(int(duration), 60)
-                duration_str = f'{mins}:{secs:02d}'
-
-            description_parts = []
-            if duration_str:
-                description_parts.append(duration_str)
-            if channel:
-                description_parts.append(channel)
-            description = ' | '.join(description_parts) if description_parts else 'YouTube video'
-
-            articles.append(
-                InlineQueryResultArticle(
-                    id=str(i),
-                    title=title,
-                    input_message_content=InputTextMessageContent(
-                        message_text=video_url,
-                    ),
-                    description=description,
-                )
-            )
-
-        if not articles:
-            articles.append(
-                InlineQueryResultArticle(
-                    id='no_results',
-                    title='No results found',
-                    input_message_content=InputTextMessageContent(
-                        message_text='No YouTube results found.',
-                    ),
-                    description=f'No videos found for "{search_text}"',
-                )
-            )
-
-    elif any(domain in query for domain in ['tiktok.com', 'instagram.com', 'youtube.com', 'youtu.be']):
-        link = query.strip()
-        if 'tiktok.com' in link:
-            label = 'TikTok'
-        elif 'instagram.com' in link:
-            label = 'Instagram'
+        info = await asyncio.to_thread(bot_func.extract_video_info, link)
+        if info:
+            preview_title = info.get('title') or f'Download {label} video'
+            preview_thumb = info.get('thumbnail') or None
+            duration_str = _fmt_duration(info.get('duration'))
+            preview_desc = f'{label} | {duration_str}' if duration_str else label
+            user_data[key]['title'] = info.get('title', '')
         else:
-            label = 'YouTube'
+            preview_title = f'Download {label} video'
+            preview_thumb = None
+            preview_desc = f'Download video from {label}'
 
         articles.append(
             InlineQueryResultArticle(
                 id='dl_social',
-                title=f'Download {label} video',
+                title=preview_title,
                 input_message_content=InputTextMessageContent(
-                    message_text=link,
+                    message_text=f"Downloading {label} video...\n{link}",
                 ),
-                description=f'Download video from {label}',
+                description=preview_desc,
+                thumbnail_url=preview_thumb,
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(
+                        text="Download",
+                        callback_data=cb.pack(),
+                    )]]
+                ),
             )
         )
+
+    elif query:
+        if query.startswith('v ') and len(query) > 2:
+            search_text = query[2:].strip()
+            mode = 'video'
+            btn_label = 'Download MP4'
+        else:
+            search_text = query
+            mode = 'audio'
+            btn_label = 'Download MP3'
+
+        if search_text:
+            logger.info(f'YouTube {mode} search: {search_text}')
+            entries = await asyncio.to_thread(bot_func.search_youtube, search_text, 5)
+
+            for i, entry in enumerate(entries):
+                title = entry.get('title', 'No title')
+                channel = entry.get('channel') or entry.get('uploader', '')
+                video_url = entry.get('url') or entry.get('webpage_url', '')
+                video_id = entry.get('id', '')
+                thumb = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg' if video_id else 'https://placehold.co/320x180.png'
+
+                key = f"inl_{user_id}_{i}"
+                user_data[key] = {'url': video_url, 'mode': mode, 'title': title}
+
+                parts = [p for p in (
+                    _fmt_duration(entry.get('duration')),
+                    _fmt_views(entry.get('view_count')),
+                    channel,
+                ) if p]
+                description = ' | '.join(parts) if parts else 'YouTube'
+
+                cb = CommonParamInline(key=key)
+                articles.append(
+                    InlineQueryResultArticle(
+                        id=str(i),
+                        title=title,
+                        input_message_content=InputTextMessageContent(
+                            message_text=f"{title}\n{video_url}",
+                        ),
+                        description=description,
+                        thumbnail_url=thumb,
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[[InlineKeyboardButton(
+                                text=btn_label,
+                                callback_data=cb.pack(),
+                            )]]
+                        ),
+                    )
+                )
+
+            if not articles:
+                articles.append(
+                    InlineQueryResultArticle(
+                        id='no_results',
+                        title='No results found',
+                        input_message_content=InputTextMessageContent(
+                            message_text='No YouTube results found.',
+                        ),
+                        description=f'No videos found for "{search_text}"',
+                    )
+                )
 
     else:
         articles.append(
@@ -138,9 +168,9 @@ async def inline_query_handler(inline_query: types.InlineQuery, logger, bot_func
                 id='help',
                 title='How to use',
                 input_message_content=InputTextMessageContent(
-                    message_text='Use @bot ssoc <query> to search YouTube, or paste a TikTok/Instagram/YouTube link.',
+                    message_text='Type a search query for MP3, "v query" for video, or paste a TikTok/Instagram link.',
                 ),
-                description='ssoc <query> | or paste a social link',
+                description='<query> = MP3 | v <query> = video | TikTok/Insta link',
             )
         )
 
@@ -173,7 +203,7 @@ async def cmd_test2(message: types.Message, logger):
 async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
     caller = message.from_user
     if ut.get_user_by_id(caller.id).empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     logger.info(f'User {caller.id} {caller.full_name} run to clear memory')
 
@@ -198,7 +228,7 @@ async def cmd_reset_memory(message: types.Message, logger, cfg, bot: Bot):
         logger.info(f'Notification sent to {target_id}')
     except IndexError:
         logger.info(f'{target_id} dont reg')
-        await message.answer(f"Ти не зареганий натисни /start")
+        await message.answer("Ти не зареганий натисни /start")
     except Exception as e:
         logger.exception(f'{target_id} dont reg')
         await message.answer(f"помилка {e}")
@@ -208,16 +238,18 @@ async def cmd_me(message: types.Message):
     user_bot = message.from_user
     df_t = ut.get_user_by_id(user_bot.id)
     if df_t.empty:
-        await message.reply(f"Ти не зареганий натисни /start")
+        await message.reply("Ти не зареганий натисни /start")
         return
     user = ut.pandas2pydentic(df_t)
     total_mb = round(user.level.value/(1024**2), 2)
     used_mb = round(user.use_memory/(1024**2), 2)
     left_mb = max(0, total_mb-used_mb)
+    progress_bar_str_value = ut.progress_bar_str(used_mb, total_mb)
     await message.reply(
         f"Тебе звати: {ut.get_name_from_pydantic(user)}, твоє ID: {user.id}\n" 
         f"Твій рівень: {user.level.name}\n"
-        f"Ти використав {used_mb } з {total_mb} MB\n"
+        f"Ти використав {used_mb} з {total_mb} MB\n"
+        f"{progress_bar_str_value}\n"
         f"У тебе лишилось: {left_mb} MB"
         )
 

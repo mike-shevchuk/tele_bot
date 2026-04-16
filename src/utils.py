@@ -1,4 +1,5 @@
 from pathlib import Path
+import glob
 import pandas as pd
 import requests
 import os
@@ -11,13 +12,12 @@ from functools import reduce
 import numpy as np
 import re
 from src.Users import UserTele, Level
-from src.Errors import CSVError
-
 
 root_prj = Path(__file__).parent.parent.absolute()
 
+
 # get name or nickname from username or full_name something that exists in db
-def get_name_from_pydantic(user: UserTele):
+def get_name_from_pydantic(user: UserTele) -> str:
     username = user.username
     full_name = user.full_name
     if username:
@@ -25,22 +25,24 @@ def get_name_from_pydantic(user: UserTele):
     elif full_name:
         return full_name
     else:
-        return user.id
+        return str(user.id)
 
-def progress_bar_str(current, max_value, length=8):
+
+def progress_bar_str(current: float, max_value: float, length=8) -> str:
     percent = 100 * current / max_value
     percent = round(percent, 2)
     filled = int(length * current // max_value)
     filled = max(1, filled)
-    bar = '🟥' * filled + '🟩' * (length - filled)
-    return f'{bar} {percent} %'
+    bar = "🟥" * filled + "🟩" * (length - filled)
+    return f"{bar} {percent} %"
 
-def crt_cfg_params(cfg_params):
-    cfg = load_config('configs/cfg.yml')
+
+def crt_cfg_params(cfg_params) -> dict:
+    cfg = load_config("configs/cfg.yml")
     cfg_params_copy = edict(cfg_params.copy())
     res = edict()
     for key, value in cfg_params_copy.items():
-        keys = key.split('.')
+        keys = key.split(".")
         nested_dict = reduce(lambda d, key: d.get(key) if d else None, keys[:-1], cfg)
         if nested_dict:
             cfg_value = nested_dict.get(keys[-1])
@@ -54,7 +56,7 @@ def crt_cfg_params(cfg_params):
     return res
 
 
-def load_config(config_path='configs/cfg.yml'):
+def load_config(config_path="configs/cfg.yml"):
     """
     Load configuration from a YAML file.
 
@@ -69,20 +71,19 @@ def load_config(config_path='configs/cfg.yml'):
     config = edict(config)
 
     shared_vars = config.shared_vars
-    shared_vars.update({'prj_root': os.getcwd()})
+    shared_vars.update({"prj_root": os.getcwd()})
     parse_config(config, shared_vars=shared_vars)
- 
 
     # shared_vars = config.shared_vars
     # TODO: change this hack
     # prj_root = str(Path(file).parent.parent)
     # shared_vars.update({'prj_root': os.path.normpath(prj_root)})
     # parse_config(config, shared_vars=shared_vars)
-    
+
     return config
 
 
-def parse_config(cfg, shared_vars):
+def parse_config(cfg, shared_vars) -> None:
     # TODO: check is str a path is path normalizete it
     for key, value in cfg.items():
         if isinstance(value, dict):
@@ -95,29 +96,29 @@ def parse_config(cfg, shared_vars):
             # if new value is numeric
             if new_value.isnumeric():
                 new_value = int(new_value)
-                
-            cfg[key] = new_value
- 
 
-def pydantic2pandas(user):
+            cfg[key] = new_value
+
+
+def pydantic2pandas(user: UserTele) -> pd.DataFrame:
     user_df = pd.DataFrame([user.to_dict()])
     user_df = user_df.replace({np.nan: None})
-    user_df.set_index('id', inplace=True)
+    user_df.set_index("id", inplace=True)
     return user_df
 
 
-def pandas2pydentic(user_df):
+def pandas2pydentic(user_df: pd.DataFrame) -> UserTele:
     user_id = int(user_df.index[0])
-    user_dct = user_df.to_dict(orient='records')[0]
-    user_dct['id'] = user_id 
-    user_dct['level'] = Level.__members__.get((user_dct['level']).split('.')[-1])
+    user_dct = user_df.to_dict(orient="records")[0]
+    user_dct["id"] = user_id
+    user_dct["level"] = Level.__members__.get((user_dct["level"]).split(".")[-1])
 
-    user_tele : UserTele = UserTele.model_validate(user_dct)
+    user_tele: UserTele = UserTele.model_validate(user_dct)
 
     return user_tele
 
 
-def create_empty_csv():
+def create_empty_csv() -> pd.DataFrame:
     us_test = UserTele.get_example()
     t_id = us_test.id
     user_df = pydantic2pandas(us_test)
@@ -125,102 +126,119 @@ def create_empty_csv():
     save_reg_user(user_df)
     return user_df
 
-def remove_non_ascii(text):
-    return re.sub(r'[^\x00-\x7F]+', '', text)
 
-def get_user_by_id(usr_id):
-    users_reg_df: pd.DataFrame  = get_reg_users()
+def remove_non_ascii(text: str) -> str:
+    return re.sub(r"[^\x00-\x7F]+", "", text)
+
+
+def get_user_by_id(usr_id: int) -> pd.DataFrame:
+    users_reg_df: pd.DataFrame = get_reg_users()
 
     if usr_id in users_reg_df.index:
-        logger.debug(f'User {usr_id} is already registered ')
+        logger.debug(f"User {usr_id} is already registered ")
         return users_reg_df.loc[[usr_id]]
     else:
-        logger.debug(f'User {usr_id} not in db')
+        logger.debug(f"User {usr_id} not in db")
         return pd.DataFrame()
 
 
-def update_row(user:UserTele):
+def update_row(user: UserTele) -> None:
     all_df = get_reg_users()
     user_row = pydantic2pandas(user)
-    logger.trace(f'{all_df=}, \n{user_row=}')
+    logger.trace(f"{all_df=}, \n{user_row=}")
     all_df.update(user_row)
     save_reg_user(all_df)
 
 
-def get_reg_users():
-    reg_user_path = root_prj / 'data/reg_user.csv'
-    print(f'{reg_user_path.parent=}')
+def get_reg_users() -> pd.DataFrame:
+    reg_user_path = root_prj / "data/reg_user.csv"
+    print(f"{reg_user_path.parent=}")
     reg_user_path.parent.mkdir(parents=True, exist_ok=True)
 
     if reg_user_path.is_file():
         df = pd.read_csv(reg_user_path)
-        if df.empty:     
-            logger.warning('Csv file is empty')
+        if df.empty:
+            logger.warning("Csv file is empty")
             return create_empty_csv()
-        
-        df= df.replace({np.nan: None})
-        df.set_index('id', inplace=True)
+
+        df = df.replace({np.nan: None})
+        df.set_index("id", inplace=True)
         return df
     else:
-        logger.warning('not exist')
+        logger.warning("not exist")
         return create_empty_csv()
-        
+
     # STEP_1: check if file exist
-    # if 
+    # if
     # STEP_2: if not create empty file and return empyy dataframe
     # STEP3: if exist, read csv dile and return DataFrame
     ...
 
 
-def save_reg_user(df):
-    reg_user_path = root_prj / 'data/reg_user.csv'
+def save_reg_user(df: pd.DataFrame) -> None:
+    reg_user_path = root_prj / "data/reg_user.csv"
     df.to_csv(reg_user_path)
-
 
 
 def setup_logger(LOGGER: loguru.logger, data_name="", log_dir=""):
     # Set up loguru
     timestr = time.strftime("%Y-%m-%d_%H:%M:%S")
-    logfile_name = f'tele_bot_{data_name}'
+    logfile_name = f"tele_bot_{data_name}"
     dir_logs = f"logs/{log_dir}"
     logfile_name = f"{dir_logs}/{logfile_name}_{timestr}.log"
     fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {name} | <level>{level}</level> | <level>{message}</level>"
     LOGGER.remove(0)
-    LOGGER.add(logfile_name,
-                level="DEBUG",
-                format=fmt,
-                colorize=False,
-                backtrace=False,
-                diagnose=True)
-    LOGGER.add(os.sys.stdout, level="TRACE", format=fmt, colorize=True, backtrace=True, diagnose=True)
+    LOGGER.add(
+        logfile_name,
+        level="DEBUG",
+        format=fmt,
+        colorize=False,
+        backtrace=False,
+        diagnose=True,
+    )
+    LOGGER.add(
+        os.sys.stdout,
+        level="TRACE",
+        format=fmt,
+        colorize=True,
+        backtrace=True,
+        diagnose=True,
+    )
 
     global logger
     logger = LOGGER
     return logger
 
 
-
-def expand_url(url):
+def expand_url(url: str) -> str:
     try:
         response = requests.head(url, allow_redirects=True)
         return response.url
-    except requests.RequestException as e:
+    except requests.RequestException:
         # logger.exception(f"Error expanding URL: {e}")
         return url
 
 
-def h_readable(file_size, unit='B'):
+def h_readable(file_size: int | float, unit="B") -> str:
     if file_size > 1024 * 1024:
-        file_size /=  1024 * 1024
-        unit = 'MB'
+        file_size /= 1024 * 1024
+        unit = "MB"
     elif file_size > 1024:
         file_size /= 1024
-        unit = 'KB'
-    return f"{file_size:.2f} {unit}" if file_size > 0 else f'0 {unit} or less'
+        unit = "KB"
+    return f"{file_size:.2f} {unit}" if file_size > 0 else f"0 {unit} or less"
 
 
+def parse_media_filename(file_path: str) -> tuple[str, str]:
+    """Extract (title, ext) from a media file path.
 
-def delete_video_file(file_path):
+    Example: "media/123/My Video.mp4" → ("My Video", ".mp4")
+    """
+    stem, ext = os.path.splitext(os.path.basename(file_path))
+    return stem, ext
+
+
+def delete_video_file(file_path) -> None:
     try:
         # Check if the file exists
         if os.path.exists(file_path):
@@ -228,8 +246,14 @@ def delete_video_file(file_path):
             logger.info(f"The file {file_path} has been deleted successfully.")
         else:
             logger.warning(f"The file {file_path} does not exist.")
+        # Also remove sidecar {stem}__{date}.txt if present
+        stem = os.path.splitext(file_path)[0]
+        for sidecar in glob.glob(glob.escape(stem) + "__*.txt"):
+            os.remove(sidecar)
     except Exception as e:
-        logger.error(f"An error occurred while trying to delete the file {file_path}: {e}")
+        logger.error(
+            f"An error occurred while trying to delete the file {file_path}: {e}"
+        )
 
 
 def get_file_size(file_path):
@@ -244,20 +268,26 @@ def get_file_size(file_path):
             logger.warning(f"The file {file_path} does not exist.")
             return None
     except Exception as e:
-        logger.error(f"An error occurred while trying to get the size of the file {file_path}: {e}")
+        logger.error(
+            f"An error occurred while trying to get the size of the file {file_path}: {e}"
+        )
         return None
 
 
-def cr_2_ln(sent:str) -> str:
+def cr_2_ln(sent: str) -> str:
     return cyrillic_to_latin(sent)
+
 
 def ln_2_cr(sent: str) -> str:
     return latin_to_cyrillic(sent)
 
-def is_ltn(sent:str) -> bool:
-    return bool(re.search(r'[a-zA-Z]', sent)) and not bool(re.search(r'[а-яА-ЯіІїЇєЄґҐ]', sent))
+
+def is_ltn(sent: str) -> bool:
+    return bool(re.search(r"[a-zA-Z]", sent)) and not bool(
+        re.search(r"[а-яА-ЯіІїЇєЄґҐ]", sent)
+    )
+
 
 def get_prj_root():
     root_path = Path.cwd()
     return root_path
-
