@@ -155,13 +155,15 @@ async def handle_inst_tick(message: types.Message, cfg):
     loc_video = f"media/{user.id}/%(title)s.%(ext)s"
 
     ydl_opts = {
-        # Prefer H.264 (avc1) + AAC so the file plays on Apple devices (iOS/macOS/Safari).
-        # Falls back to any mp4 streams, then any format yt-dlp can find.
+        # Prefer H.264 + AAC. format_sort ranks h264 highest so the
+        # bestvideo fallback also picks H.264 when available.
+        # _ensure_h264() transcodes as a last resort if only VP9/AV1 exist.
         "format": (
             "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]"
             "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
             "/bestvideo+bestaudio/best"
         ),
+        "format_sort": ["vcodec:h264"],
         "merge_output_format": "mp4",
         "outtmpl": loc_video,
     }

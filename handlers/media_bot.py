@@ -29,6 +29,7 @@ _YDL_OPTS_BY_MODE = {
             "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
             "/bestvideo+bestaudio/best"
         ),
+        "format_sort": ["vcodec:h264"],
         "merge_output_format": "mp4",
     },
 }
