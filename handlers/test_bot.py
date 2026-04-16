@@ -357,15 +357,14 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
             args = message.text.split()
             if len(args) != 3:
                 await message.reply('Формат: /setlevel <user_id> <user_new_level>')
-                levels = ', '.join(l.name for l in Level)
-                await message.reply(f'Доступні рівні: {levels}')
                 return
             target_id = int(args[1]) 
         except ValueError:
             await message.reply("❌ user_id має бути числом")
             return
 
-        target_new_level = args[2]
+        target_new_level = args[2] \
+        
         target_df=ut.get_user_by_id(target_id)
 
         if target_df.empty:
@@ -373,7 +372,15 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
                 return
         
         target_user=ut.pandas2pydentic(target_df)
-        target_user.level = Level[target_new_level]
+
+        try:
+            new_level = Level[target_new_level]
+        except KeyError:
+            levels = ', '.join(l.name for l in Level)
+            await message.reply(f'❌ Невідомий рівень. Доступні рівні: {levels}')
+            return
+        
+        target_user.level = new_level
         ut.update_row(target_user)
         await bot.send_message(target_id, f'Твій новий level: {target_user.level}.')
         await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
