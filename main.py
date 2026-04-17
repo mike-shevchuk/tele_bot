@@ -187,9 +187,11 @@ async def handle_inst_tick(message: types.Message, cfg):
     try:
         ext = os.path.splitext(loc_video)[1].lower()
         if ext in ('.mp4', '.mkv', '.webm'):
+            logger.info(f'Sending as video: {loc_video}')
             await message.answer_video(
                 video=types.FSInputFile(loc_video), caption=answer_cap)
         else:
+            logger.info(f'Sending as audio: {loc_video}')
             await message.answer_audio(
                 audio=types.FSInputFile(loc_video), caption=answer_cap)
     except Exception as e:
