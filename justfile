@@ -53,6 +53,11 @@ review pr:
         tmux attach-session -t "$session"
     fi
 
+
+review_watcher:
+  #!/usr/bin/env bash
+  tmux new-session -d -s review-queue 'just queue-watch'
+
 # Watch /tmp/tele-bot-review-queue/pending/ for review requests from the bot.
 # The bot's /review handler writes JSON files there with caller info + PR number.
 # This watcher picks each up and spawns `claude --print '/review-pr-ukr N'` in tmux.
@@ -129,11 +134,11 @@ queue-watch:
              echo 'claude --version:'; claude --version 2>/dev/null || true; \
              echo 'PWD:' \$(pwd); \
              echo; \
-             echo '──── claude output (verbose) ────'; \
-             ( while sleep 20; do echo \"[\$(date +'%F %T')] ⏳ still working...\"; done ) & HB=\$!; \
-             claude --verbose --print '/review-pr-ukr $pr' 2>&1 | awk '{ print strftime(\"[%F %T]\"), \$0; fflush() }'; \
+             echo '──── claude output ────'; \
+             claude --output-format stream-json '/review-pr-ukr $pr' 2>&1 \
+               | jq -r --unbuffered 'if .type == \"assistant\" then (.message.content[] | select(.type == \"text\") | .text) elif .type == \"result\" then \"\\n✅ Done (exit=\\(.subtype))\" else empty end' 2>/dev/null \
+               | awk '{ print strftime(\"[%F %T]\"), \$0; fflush() }'; \
              rc=\${PIPESTATUS[0]}; \
-             kill \$HB 2>/dev/null; wait \$HB 2>/dev/null; \
              echo; echo \"──── claude exit=\$rc ────\"; \
              jq --arg ts \"\$(date -u +%FT%TZ)\" --argjson rc \$rc --arg log '$log' \
                 '. + {completed_at: \$ts, exit_code: \$rc, status: (if \$rc == 0 then \"success\" else \"failed\" end), log_file: \$log}' \
