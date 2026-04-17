@@ -184,19 +184,17 @@ async def handle_inst_tick(message: types.Message, cfg):
         ),
         url=message.text,
     )
-    logger.info(f'<<<<<{loc_video}')
     try:
         if loc_video.endswith('mp4'):
             await message.answer_video(
                 video=types.FSInputFile(loc_video), caption=answer_cap)
         else:
             await message.answer_audio(
-                video=types.FSInputFile(loc_video), caption=answer_cap)
+                audio=types.FSInputFile(loc_video), caption=answer_cap)
     except Exception as e:
         await message.reply(f"An error occurred while sending the video: {e}")
     user.use_memory += file_size
-    loc_match = glob.glob(os.path.join(".", f"{loc_video.replace("%(ext)s", "")}.*"))
-    assert loc_match
+    loc_match = glob.glob(os.path.join(".", f"{loc_video}*"))
     loc_video = loc_match[0]
     ut.update_row(user)
     ut.delete_video_file(loc_video)
