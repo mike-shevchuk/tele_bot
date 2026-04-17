@@ -371,16 +371,16 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
             return
         
         target_id = int(args[1])
-        target_level_name = args[2]
+        level_name = args[2]
 
-        if target_level_name not in Level.__members__:
+        if level_name not in Level.__members__:
             levels = ', '.join(Level.__members__)
             logger.warning('Unknown level.')
             await message.reply(f'❌ Невідомий рівень. Доступні рівні: {levels}')
             return
         
-        new_level = Level[target_level_name]
-        target_df = ut.get_user_by_id(target_id) 
+        new_level = Level[level_name]
+        target_df = ut.get_user_by_id(target_id)
 
         if target_df.empty:
             logger.warning('Target user is empty')
@@ -393,7 +393,7 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
         target_user.level = new_level
         ut.update_row(target_user)
         try:
-            await bot.send_message(target_id, f'Твій новий level: {target_user.level.name}.')
+            await bot.send_message(target_id, f'Твій новий рівень: {target_user.level.name}.')
         except Exception:
             logger.warning(f'Невдалось повідомити користувача про зміну рівня{target_id}.')
         await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
