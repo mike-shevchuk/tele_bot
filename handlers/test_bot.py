@@ -392,7 +392,10 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
         logger.info(f'/setlevel {target_id} ({target_user.full_name}): {old_level.name} -> {new_level.name}')
         target_user.level = new_level
         ut.update_row(target_user)
-        await bot.send_message(target_id, f'Твій новий level: {target_user.level.name}.')
+        try:
+            await bot.send_message(target_id, f'Твій новий level: {target_user.level.name}.')
+        except Exception:
+            logger.warning(f'Невдалось повідомити користувача про зміну рівня{target_id}.')
         await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
     except Exception as e:
         logger.exception(f"Проблема в /setlevel: {e}")
