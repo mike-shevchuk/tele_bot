@@ -362,30 +362,30 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
     try:
         args = message.text.split()
         if len(args) != 3:
-            logger.warning(f'args leghth doesn\'t equal 3. len(args)= {len(args)}')
+            logger.warning(f'args length doesn\'t equal 3. len(args)= {len(args)}')
             await message.reply('Формат: /setlevel <user_id> <user_new_level>')
             return
         if not args[1].isdigit():
-            logger.warning(f'user_id is not int')
+            logger.warning('user_id is not int.')
             await message.reply("❌ user_id має бути числом")
             return
         
         target_id = int(args[1])
-        target_new_level = args[2]
+        target_level_name = args[2]
 
-        if target_new_level not in Level.__members__:
+        if target_level_name not in Level.__members__:
             levels = ', '.join(Level.__members__)
-            logger.warning(f'Unknown level.')
+            logger.warning('Unknown level.')
             await message.reply(f'❌ Невідомий рівень. Доступні рівні: {levels}')
             return
         
-        new_level = Level[target_new_level]
+        new_level = Level[target_level_name]
         target_df = ut.get_user_by_id(target_id) 
 
         if target_df.empty:
-                logger.warning('Target user is empty')
-                await message.reply('Незнайдено вказаного користувача')
-                return
+            logger.warning('Target user is empty')
+            await message.reply('Незнайдено вказаного користувача')
+            return
         
         target_user = ut.pandas2pydentic(target_df)
         old_level = target_user.level
@@ -397,8 +397,8 @@ async def cmd_setlevel(message: types.Message, logger, bot: Bot):
         except Exception:
             logger.warning(f'Невдалось повідомити користувача про зміну рівня{target_id}.')
         await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
-    except Exception as e:
-        logger.exception(f"Проблема в /setlevel: {e}")
+    except Exception:
+        logger.exception(f"Проблема в /setlevel")
         await message.reply("❌ Виникла несподівана помилка")
 
 
