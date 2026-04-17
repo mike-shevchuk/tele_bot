@@ -357,6 +357,7 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
 async def cmd_setlevel(message: types.Message, logger, bot: Bot):
     user = await check_access(message, [Level.admin])
     if not user:
+        logger.warning('user levele is not admin')
         return
     
     try:
