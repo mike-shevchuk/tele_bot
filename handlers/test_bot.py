@@ -4,13 +4,18 @@ from aiogram.types import Message
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
 import html
+import json
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from aiogram.filters.command import Command
 from aiogram.utils.markdown import hide_link
 from src.bot import CommonParamInline
 from src import utils as ut
 import pandas as pd
 from src.Users import Level
+
+REVIEW_QUEUE_DIR = Path('/tmp/tele-bot-review-queue/pending')
 
 _last_query_time: dict[int, float] = {}
 
@@ -345,3 +350,105 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
+
+
+@router.message(Command('review'))
+async def cmd_review(message: types.Message, logger):
+    caller = message.from_user
+    logger.info(f'/review called by {caller.id} ({caller.full_name}): {message.text!r}')
+
+    user = await check_access(message, [Level.admin, Level.vip])
+    if not user:
+        return
+
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit() or int(args[1]) <= 0:
+        logger.warning(f'/review bad args: {args}')
+        await message.reply('Формат: /review <pr_number>')
+        return
+    pr_number = int(args[1])
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        'pr_number': pr_number,
+        'caller_id': caller.id,
+        'caller_username': caller.username,
+        'caller_full_name': caller.full_name,
+        'requested_at': now.isoformat(timespec='seconds'),
+    }
+    filename = f'pr-{pr_number}-{now.strftime("%Y%m%dT%H%M%S")}-{caller.id}.json'
+    request_file = REVIEW_QUEUE_DIR / filename
+
+    try:
+        REVIEW_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        request_file.write_text(json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        logger.exception(f'/review failed to write queue file {request_file}')
+        await message.reply('❌ Не вдалося записати запит у чергу. Перевір логи.')
+        return
+
+    logger.info(f'/review queued payload={payload} file={request_file}')
+    await message.reply(
+        f'✅ Запит на review PR #{pr_number} поставлено в чергу.\n'
+        f'Файл: {filename}\n'
+        f'Результат зʼявиться на GitHub за кілька хвилин.'
+    )
+
+
+@router.message(Command('check_pr'))
+async def cmd_check_pr(message: types.Message, logger):
+    caller = message.from_user
+    logger.info(f'/check_pr called by {caller.id} ({caller.full_name}): {message.text!r}')
+
+    user = await check_access(message, [Level.admin, Level.vip])
+    if not user:
+        return
+
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit() or int(args[1]) <= 0:
+        logger.warning(f'/check_pr bad args: {args}')
+        await message.reply('Формат: /check_pr <pr_number>')
+        return
+    pr_number = int(args[1])
+
+    today = datetime.now(timezone.utc).date()
+    queue_root = REVIEW_QUEUE_DIR.parent
+    records = []
+    for subdir in ('pending', 'processed'):
+        d = queue_root / subdir
+        if not d.exists():
+            continue
+        for f in sorted(d.glob('*.json')):
+            try:
+                data = json.loads(f.read_text())
+            except Exception:
+                continue
+            if data.get('pr_number') != pr_number or data.get('caller_id') != caller.id:
+                continue
+            rq_str = str(data.get('requested_at', '')).replace('Z', '+00:00')
+            try:
+                rq_dt = datetime.fromisoformat(rq_str)
+            except ValueError:
+                continue
+            if rq_dt.astimezone(timezone.utc).date() != today:
+                continue
+            records.append((subdir, data))
+
+    if not records:
+        await message.reply(f'Нема записів для PR #{pr_number} сьогодні від тебе.')
+        return
+
+    records.sort(key=lambda r: r[1].get('requested_at', ''))
+    icons = {'success': '✅', 'failed': '❌'}
+    lines = [f'📋 PR #{pr_number} сьогодні ({caller.full_name}) — {len(records)} запис(ів):', '']
+    for i, (state, data) in enumerate(records, 1):
+        status = data.get('status', state)
+        icon = icons.get(status, '⏳' if state == 'pending' else '⌛')
+        line = f'{i}. {icon} {status} | req={data.get("requested_at", "?")}'
+        if data.get('completed_at'):
+            line += f' | done={data["completed_at"]}'
+        if 'exit_code' in data:
+            line += f' | rc={data["exit_code"]}'
+        lines.append(line)
+
+    await message.reply('\n'.join(lines))
