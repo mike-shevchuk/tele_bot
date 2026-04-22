@@ -118,9 +118,8 @@ async def handle_callback(callback_query: types.CallbackQuery, logger, user_data
         ut.update_row(user)
     except Exception as e:
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
-    
-    
-    ut.delete_video_file(loc_media)
+    finally:
+        ut.delete_video_file(loc_media)
     
 
 
