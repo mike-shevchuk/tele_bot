@@ -156,7 +156,11 @@ def get_reg_users() -> pd.DataFrame:
     reg_user_path.parent.mkdir(parents=True, exist_ok=True)
 
     if reg_user_path.is_file():
-        df = pd.read_csv(reg_user_path)
+        try:
+            df = pd.read_csv(reg_user_path)
+        except pd.errors.EmptyDataError:
+            logger.warning("Csv file has no header (0-byte file)")
+            return create_empty_csv()
         if df.empty:
             logger.warning("Csv file is empty")
             return create_empty_csv()
