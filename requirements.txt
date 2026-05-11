@@ -16,7 +16,7 @@ python-dotenv==1.0.1
 pyyaml==6.0.2
 tomli==2.0.1
 tqdm==4.67.1
-yt-dlp==2025.3.27
+yt-dlp==2026.3.17
 curl_cffi==0.10.0
 easydict==1.13
 srtools==0.1.13
