@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import re
 from src.Users import UserTele, Level
+from scr.Errors import CSVError
 
 root_prj = Path(__file__).parent.parent.absolute()
 
@@ -129,13 +130,15 @@ def remove_non_ascii(text: str) -> str:
 def get_user_by_id(usr_id: int) -> pd.DataFrame:
     users_reg_df: pd.DataFrame  = get_reg_users()
 
-    if usr_id in users_reg_df.index:
-        logger.debug(f'User {usr_id} is already registered ')
-        return users_reg_df.loc[[usr_id]]
-    else:
-        logger.debug(f'User {usr_id} not in db')
-        return pd.DataFrame()
-
+    try:
+        if usr_id in users_reg_df.index:
+            logger.debug(f'User {usr_id} is already registered ')
+            return users_reg_df.loc[[usr_id]]
+        else:
+            logger.debug(f'User {usr_id} not in db')
+            return pd.DataFrame()
+    except TypeError:
+        raise CSVError('Wrongy input type')
 
 def update_row(user:UserTele) -> None:
     all_df = get_reg_users()
@@ -151,17 +154,16 @@ def get_reg_users() -> pd.DataFrame:
     reg_user_path.parent.mkdir(parents=True, exist_ok=True)
 
     if reg_user_path.is_file():
-        df = pd.read_csv(reg_user_path)
-        if df.empty:     
-            logger.warning('Csv file is empty')
+        try:
+            df = pd.read_csv(reg_user_path)
+            if 'id' not in df.columns:
+                raise CSVError('Column id does not exist in CSV')
+            df.set_index('id', inplace=True)
+            return df
+        except FileNotFoundError:
             return create_empty_csv()
-        
-        df= df.replace({np.nan: None})
-        df.set_index('id', inplace=True)
-        return df
-    else:
-        logger.warning('not exist')
-        return create_empty_csv()
+        except pd.errors.ParserError as e:
+            raise CSVError(f'CSV file is corupted: {e}')
         
     # STEP_1: check if file exist
     # if 
@@ -171,8 +173,12 @@ def get_reg_users() -> pd.DataFrame:
 
 
 def save_reg_user(df: pd.DataFrame) -> None:
-    reg_user_path = root_prj / 'data/reg_user.csv'
-    df.to_csv(reg_user_path)
+    if df:
+        reg_user_path = root_prj / 'data/reg_user.csv'
+        try:
+            df.to_csv(reg_user_path)
+        except Exception:
+            raise CSVError(f'{Exception}')
 
 
 
