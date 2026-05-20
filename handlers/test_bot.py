@@ -312,7 +312,7 @@ async def _load_users_df(message: types.Message, logger, cfg):
 async def _reply_users_table(df_display, col: str, message: types.Message, logger):
     """Sort by col, select display columns, and reply with formatted table."""
     df_display = df_display.sort_values(by=col, ascending=False)
-    df_display = df_display.loc[:, ['level', 'ID', 'nick/name', col]]
+    df_display = df_display.loc[:, ['ID', 'level', 'nick/name', col]]
     logger.trace(df_display)
     text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
     await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
