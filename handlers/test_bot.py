@@ -303,9 +303,10 @@ async def _load_users_df(message: types.Message, logger, cfg):
     level_to_bytes = lambda x: Level.__members__.get((x).split('.')[-1]).value
     get_level_name = lambda x: str(Level.__members__.get((x).split('.')[-1])).split('.')[-1]
     df_display['level'] = df_display['level_memory'].map(get_level_name)
+    df_display['level'] = df_display['level'].str[:5]
     df_display['level_memory'] = df_display['level_memory'].map(level_to_bytes)
     df_display[['nick', 'name']] = df_display[['nick', 'name']].fillna('-')
-    df_display['nick/name'] = df_display['nick'].str[:13] + '/' + df_display['name'].str[:7]
+    df_display['nick/name'] = df_display['nick'].str[:10] + '/' + df_display['name'].str[:7]
     return df_display
 
 
@@ -314,7 +315,7 @@ async def _reply_users_table(df_display, col: str, message: types.Message, logge
     df_display = df_display.sort_values(by=col, ascending=False)
     df_display = df_display.loc[:, ['ID', 'level', 'nick/name', col]]
     logger.trace(df_display)
-    text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=10))
+    text_table = html.escape(df_display.to_string(index=False, justify='left', col_space=1))
     await message.reply(f"<pre>{text_table}</pre>", parse_mode="HTML")
 
 
@@ -325,7 +326,8 @@ async def cmd_show_users_pct(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['size%'] = round(df_display['use_memory'] / df_display['level_memory'] * 100, 1)
+        df_display['size%'] = round(df_display['use_memory'] / df_display['level_memory'] * 100)
+        df_display['size%'] = df_display['size%'].map(lambda p: int(p))
         if not user:
             return
         await _reply_users_table(df_display, 'size%', message, logger)
@@ -343,7 +345,8 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
         df_display = await _load_users_df(message, logger, cfg)
         if df_display is None:
             return
-        df_display['mb_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 1).astype(str)[:-2]
+        df_display['mb_left'] = round((df_display['level_memory'] - df_display['use_memory']) / (1024 * 1024), 1)
+        df_display['mb_left'] = df_display['mb_left'].map(lambda p: int(p))
         if user.level == Level.admin or user.level == Level.vip:
             await _reply_users_table(df_display, 'mb_left', message, logger)
         else:
