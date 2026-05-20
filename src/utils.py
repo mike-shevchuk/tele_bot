@@ -11,7 +11,7 @@ from functools import reduce
 import numpy as np
 import re
 from src.Users import UserTele, Level
-from scr.Errors import CSVError
+from src.Errors import CSVError
 
 root_prj = Path(__file__).parent.parent.absolute()
 
@@ -128,20 +128,22 @@ def remove_non_ascii(text: str) -> str:
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
 def get_user_by_id(usr_id: int) -> pd.DataFrame:
+    if not isinstance(usr_id, int):
+        raise CSVError(f'usr_id must be int, got {type(usr_id).__name__}')
     users_reg_df: pd.DataFrame  = get_reg_users()
+    
+    if usr_id in users_reg_df.index:
+        logger.debug(f'User {usr_id} is already registered ')
+        return users_reg_df.loc[[usr_id]]
+    else:
+        logger.debug(f'User {usr_id} not in db')
+        return pd.DataFrame()
 
-    try:
-        if usr_id in users_reg_df.index:
-            logger.debug(f'User {usr_id} is already registered ')
-            return users_reg_df.loc[[usr_id]]
-        else:
-            logger.debug(f'User {usr_id} not in db')
-            return pd.DataFrame()
-    except TypeError:
-        raise CSVError('Wrongy input type')
 
 def update_row(user:UserTele) -> None:
     all_df = get_reg_users()
+    if user.id not in all_df.index:
+        raise CSVError(f'User {user.id} not found in CSV')
     user_row = pydantic2pandas(user)
     logger.trace(f'{all_df=}, \n{user_row=}')
     all_df.update(user_row)
@@ -153,18 +155,23 @@ def get_reg_users() -> pd.DataFrame:
     print(f'{reg_user_path.parent=}')
     reg_user_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if not reg_user_path.is_file():
+        logger.warning('CSV does not exist — creating empty one')
+        return create_empty_csv()
+    
     if reg_user_path.is_file():
         try:
             df = pd.read_csv(reg_user_path)
-            if 'id' not in df.columns:
-                raise CSVError('Column id does not exist in CSV')
-            df.set_index('id', inplace=True)
-            return df
-        except FileNotFoundError:
-            return create_empty_csv()
         except pd.errors.ParserError as e:
-            raise CSVError(f'CSV file is corupted: {e}')
+            raise CSVError(f'CSV file is corrupted: {e}')
         
+    if df.empty or 'id' not in df.columns:
+        logger.warning('CSV is empty or missing id column — recreating')
+        return create_empty_csv()
+
+    df = df.replace({np.nan: None})
+    df.set_index('id', inplace=True)
+    return df
     # STEP_1: check if file exist
     # if 
     # STEP_2: if not create empty file and return empyy dataframe
@@ -173,12 +180,14 @@ def get_reg_users() -> pd.DataFrame:
 
 
 def save_reg_user(df: pd.DataFrame) -> None:
-    if df:
-        reg_user_path = root_prj / 'data/reg_user.csv'
-        try:
-            df.to_csv(reg_user_path)
-        except Exception:
-            raise CSVError(f'{Exception}')
+    if df is None:
+        logger.warning('save_reg_user got None - skipping')
+        return
+    reg_user_path = root_prj / 'data/reg_user.csv'
+    try:
+        df.to_csv(reg_user_path)
+    except Exception as e:
+        raise CSVError(f'Failed to save CSV: {e}') from e
 
 
 
