@@ -159,11 +159,10 @@ def get_reg_users() -> pd.DataFrame:
         logger.warning('CSV does not exist — creating empty one')
         return create_empty_csv()
     
-    if reg_user_path.is_file():
-        try:
-            df = pd.read_csv(reg_user_path)
-        except pd.errors.ParserError as e:
-            raise CSVError(f'CSV file is corrupted: {e}')
+    try:
+        df = pd.read_csv(reg_user_path)
+    except pd.errors.ParserError as e:
+        raise CSVError(f'CSV file is corrupted: {e}')
         
     if df.empty or 'id' not in df.columns:
         logger.warning('CSV is empty or missing id column — recreating')
@@ -172,11 +171,7 @@ def get_reg_users() -> pd.DataFrame:
     df = df.replace({np.nan: None})
     df.set_index('id', inplace=True)
     return df
-    # STEP_1: check if file exist
-    # if 
-    # STEP_2: if not create empty file and return empyy dataframe
-    # STEP3: if exist, read csv dile and return DataFrame
-    ...
+
 
 
 def save_reg_user(df: pd.DataFrame) -> None:
