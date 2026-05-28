@@ -306,7 +306,7 @@ async def _load_users_df(message: types.Message, logger, cfg):
     df_display['level'] = df_display['level'].str[:5]
     df_display['level_memory'] = df_display['level_memory'].map(level_to_bytes)
     df_display[['nick', 'name']] = df_display[['nick', 'name']].fillna('-')
-    df_display['nick/name'] = df_display['nick'].str[:10] + '/' + df_display['name'].str[:7]
+    df_display['nick/name'] = df_display['nick'].str[:8] + '/' + df_display['name'].str[:7]
     return df_display
 
 
