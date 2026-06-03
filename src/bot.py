@@ -1,5 +1,6 @@
 # import utils as ut
 from src import utils as ut
+import contextlib
 import glob
 import re
 from datetime import datetime
@@ -41,6 +42,30 @@ def _is_retriable_error(msg: str) -> bool:
     """True if the yt-dlp error message looks like a transient, retriable one."""
     low = msg.lower()
     return any(marker in low for marker in _RETRIABLE_MARKERS)
+
+
+# Network/extractor robustness defaults shared by every yt-dlp call.
+_YDL_ROBUSTNESS_OPTS = {
+    "retries": 5,
+    "fragment_retries": 5,
+    "extractor_retries": 3,
+    "socket_timeout": 30,
+}
+
+
+def _strip_outtmpl_vars(template: str) -> str:
+    """Strip yt-dlp template vars (e.g. ".%(ext)s") to get the base path/prefix."""
+    return re.sub(r"\.?%\([^)]+\)s", "", template)
+
+
+def _cleanup_partial_downloads(base: str) -> None:
+    """Remove ``.part``/``.ytdl`` artifacts left by an interrupted yt-dlp run."""
+    if not base:
+        return
+    for leftover in glob.glob(glob.escape(base) + "*"):
+        if leftover.endswith((".part", ".ytdl")):
+            with contextlib.suppress(OSError):
+                os.remove(leftover)
 
 
 vid_format_dict = {
@@ -159,12 +184,7 @@ class Bot_Func:
     def extract_video_info(self, url):
         """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
-            opts = {
-                "quiet": True,
-                "skip_download": True,
-                "extractor_retries": 3,
-                "socket_timeout": 30,
-            }
+            opts = {"quiet": True, "skip_download": True, **_YDL_ROBUSTNESS_OPTS}
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return {
@@ -246,12 +266,8 @@ class Bot_Func:
                     pass
 
             ydl_opts_with_hook = {
-                # Network/extractor robustness defaults — caller's ydl_opts may
-                # override any of these via the spread below.
-                "retries": 5,
-                "fragment_retries": 5,
-                "extractor_retries": 3,
-                "socket_timeout": 30,
+                # Robustness defaults — caller's ydl_opts may override via spread.
+                **_YDL_ROBUSTNESS_OPTS,
                 **ydl_opts,
                 "progress_hooks": [progress_hook],
                 "postprocessor_hooks": [pp_hook],
@@ -260,15 +276,15 @@ class Bot_Func:
             def download():
                 # Retry transient failures (TikTok rehydration flakiness, timeouts,
                 # transient network errors). The same link that fails once usually
-                # succeeds on the next attempt — see logs in the bug report.
-                base = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
-                last_err = None
+                # succeeds on the next attempt — see logs in the bug report. The
+                # final attempt re-raises (attempt >= MAX), so the loop never falls
+                # through.
+                base = _strip_outtmpl_vars(loc_video)
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
                         with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
                             return ydl.extract_info(med_url, download=True)
                     except yt_dlp.utils.DownloadError as e:
-                        last_err = e
                         if attempt >= MAX_DOWNLOAD_ATTEMPTS or not _is_retriable_error(
                             str(e)
                         ):
@@ -284,18 +300,8 @@ class Bot_Func:
                             ),
                             loop,
                         )
-                        # Drop half-downloaded leftovers before the next attempt.
-                        if base:
-                            for leftover in glob.glob(glob.escape(base) + "*"):
-                                if leftover.endswith((".part", ".ytdl")):
-                                    try:
-                                        os.remove(leftover)
-                                    except OSError:
-                                        pass
+                        _cleanup_partial_downloads(base)
                         time.sleep(RETRY_BASE_DELAY * attempt)
-                # Exhausted retries — re-raise for the outer DownloadError handler.
-                if last_err:
-                    raise last_err
 
             media_info = await asyncio.to_thread(download)
             await strt_dwn_msg.delete()
@@ -320,7 +326,7 @@ class Bot_Func:
         if finished_file and os.path.exists(finished_file):
             resolved = finished_file
         else:
-            base_path = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
+            base_path = _strip_outtmpl_vars(loc_video)
             if base_path.endswith("/"):
                 # Template was directory-only — pick newest non-part file in dir
                 candidates = [
