@@ -69,11 +69,19 @@ def _cleanup_partial_downloads(base: str) -> None:
                 os.remove(leftover)
 
 
+def _source_stream_dict(media_info: dict | None) -> dict:
+    """The actually-downloaded stream dict. yt-dlp puts merged/remuxed stream
+    data under ``requested_downloads[0]``; fall back to the top-level info."""
+    if not media_info:
+        return {}
+    return (media_info.get("requested_downloads") or [{}])[0] or media_info
+
+
 def _codecs_of(media_info: dict | None) -> tuple[str, str]:
     """Return (vcodec, acodec) of the actually-downloaded stream, lowercased."""
     if not media_info:
         return "", ""
-    src = (media_info.get("requested_downloads") or [{}])[0] or media_info
+    src = _source_stream_dict(media_info)
     vcodec = ((src.get("vcodec") or media_info.get("vcodec")) or "").lower()
     acodec = ((src.get("acodec") or media_info.get("acodec")) or "").lower()
     return vcodec, acodec
@@ -118,11 +126,7 @@ class Bot_Func:
         """Log codec/resolution/bitrate and return the same text for sidecar writing."""
         if not info:
             return ""
-        # For merged/remuxed formats the final stream data lives under
-        # requested_downloads[0]; fall back to top-level info_dict fields.
-        rd = (info.get("requested_downloads") or [{}])[0]
-        src = rd if rd else info
-
+        src = _source_stream_dict(info)
         vcodec = src.get("vcodec") or info.get("vcodec", "?")
         acodec = src.get("acodec") or info.get("acodec", "?")
         width = src.get("width") or info.get("width")
@@ -253,9 +257,7 @@ class Bot_Func:
         triggered it (the real person, passed in by the handler)."""
         try:
             vcodec, acodec = _codecs_of(media_info)
-            src = ((media_info or {}).get("requested_downloads") or [{}])[0] or (
-                media_info or {}
-            )
+            src = _source_stream_dict(media_info)
             record = {
                 "ts": datetime.now().isoformat(timespec="seconds"),
                 "reason": reason,
