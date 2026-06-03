@@ -2,6 +2,7 @@
 from src import utils as ut
 import contextlib
 import glob
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -66,6 +67,22 @@ def _cleanup_partial_downloads(base: str) -> None:
         if leftover.endswith((".part", ".ytdl")):
             with contextlib.suppress(OSError):
                 os.remove(leftover)
+
+
+def _codecs_of(media_info: dict | None) -> tuple[str, str]:
+    """Return (vcodec, acodec) of the actually-downloaded stream, lowercased."""
+    if not media_info:
+        return "", ""
+    src = (media_info.get("requested_downloads") or [{}])[0] or media_info
+    vcodec = ((src.get("vcodec") or media_info.get("vcodec")) or "").lower()
+    acodec = ((src.get("acodec") or media_info.get("acodec")) or "").lower()
+    return vcodec, acodec
+
+
+def _is_video_without_audio(media_info: dict | None) -> bool:
+    """True only when we *know* it's a video stream with no audio track."""
+    vcodec, acodec = _codecs_of(media_info)
+    return vcodec not in ("", "none") and acodec == "none"
 
 
 vid_format_dict = {
@@ -137,8 +154,7 @@ class Bot_Func:
         """Transcode to H.264/AAC if the video codec is not Apple-compatible."""
         if not media_info:
             return path
-        rd = (media_info.get("requested_downloads") or [{}])[0]
-        vcodec = ((rd.get("vcodec") or media_info.get("vcodec")) or "").lower()
+        vcodec, _ = _codecs_of(media_info)
         # "none" == audio-only download (mp3 etc.): nothing to transcode.
         if not vcodec or vcodec == "none" or vcodec.startswith(self._APPLE_VCODECS):
             return path  # already fine
@@ -208,10 +224,61 @@ class Bot_Func:
             self.log.error(f"YouTube search error: {e}")
             return []
 
+    def _resolve_downloaded_file(self, outtmpl: str, finished_file: str) -> str:
+        """Find the real downloaded file: hook result first, then glob fallback."""
+        if finished_file and os.path.exists(finished_file):
+            return finished_file
+        base_path = _strip_outtmpl_vars(outtmpl)
+        if base_path.endswith("/"):
+            # Template was directory-only — pick newest non-part file in dir.
+            candidates = [
+                f
+                for f in glob.glob(os.path.join(base_path, "*"))
+                if not f.endswith(".part") and os.path.isfile(f)
+            ]
+            return max(candidates, key=os.path.getmtime) if candidates else ""
+        if base_path:
+            loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
+            if loc_match:
+                return loc_match[0]
+        return ""
+
+    def _record_download_issue(
+        self, url, reason, media_info=None, error=None, chat_id=None
+    ) -> None:
+        """Append a JSONL record (logs/download_issues.jsonl) for a failed or
+        audioless download, so the problem can be understood and reproduced."""
+        try:
+            vcodec, acodec = _codecs_of(media_info)
+            src = (media_info or {}).get("requested_downloads") or [{}]
+            src = src[0] or (media_info or {})
+            record = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "reason": reason,
+                "url": url,
+                "error": str(error) if error else None,
+                "chat_id": chat_id,
+                "yt_dlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
+                "extractor": (media_info or {}).get("extractor_key"),
+                "format_id": src.get("format_id"),
+                "vcodec": vcodec or None,
+                "acodec": acodec or None,
+                "ext": src.get("ext"),
+                "filesize": src.get("filesize") or src.get("filesize_approx"),
+            }
+            path = self.root_prj / "logs" / "download_issues.jsonl"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            self.log.info(f"📝 Recorded download issue ({reason}) → {path}")
+        except Exception as e:
+            self.log.error(f"Failed to record download issue: {e}")
+
     async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink=""):
         med_url = youtubeLink if youtubeLink else user_msg.text
 
         loc_video = ydl_opts["outtmpl"]
+        chat_id = getattr(getattr(user_msg, "chat", None), "id", None)
 
         strt_dwn_msg = None
         finished_file: str = ""
@@ -273,7 +340,7 @@ class Bot_Func:
                 "postprocessor_hooks": [pp_hook],
             }
 
-            def download():
+            def download(opts):
                 # Retry transient failures (TikTok rehydration flakiness, timeouts,
                 # transient network errors). The same link that fails once usually
                 # succeeds on the next attempt — see logs in the bug report. The
@@ -282,7 +349,7 @@ class Bot_Func:
                 base = _strip_outtmpl_vars(loc_video)
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
-                        with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
+                        with yt_dlp.YoutubeDL(opts) as ydl:
                             return ydl.extract_info(med_url, download=True)
                     except yt_dlp.utils.DownloadError as e:
                         if attempt >= MAX_DOWNLOAD_ATTEMPTS or not _is_retriable_error(
@@ -303,12 +370,44 @@ class Bot_Func:
                         _cleanup_partial_downloads(base)
                         time.sleep(RETRY_BASE_DELAY * attempt)
 
-            media_info = await asyncio.to_thread(download)
+            media_info = await asyncio.to_thread(download, ydl_opts_with_hook)
+
+            # Some sites (notably TikTok) occasionally hand back a video-only
+            # stream, so the result has no sound. Re-fetch once forcing a
+            # combined audio+video format. (Bug report: "sometimes no audio".)
+            if _is_video_without_audio(media_info):
+                self.log.warning(
+                    "⚠️ Downloaded video has no audio — refetching combined format"
+                )
+                self._record_download_issue(
+                    med_url,
+                    "video_without_audio",
+                    media_info=media_info,
+                    chat_id=chat_id,
+                )
+                silent = self._resolve_downloaded_file(loc_video, finished_file)
+                if silent:
+                    ut.delete_video_file(silent)
+                _cleanup_partial_downloads(_strip_outtmpl_vars(loc_video))
+                finished_file = ""
+                combined_opts = {
+                    **ydl_opts_with_hook,
+                    "format": "best[acodec!=none][vcodec!=none]/best",
+                }
+                media_info = await asyncio.to_thread(download, combined_opts)
+
             await strt_dwn_msg.delete()
             self.log.success(f"✅ Download successful! {loc_video}")
             self._log_media_info(media_info)
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
+            self._record_download_issue(
+                med_url,
+                "download_error",
+                media_info=media_info,
+                error=e,
+                chat_id=chat_id,
+            )
             if strt_dwn_msg:
                 await strt_dwn_msg.delete()
             await user_msg.reply(f"Download error: {e}")
@@ -320,29 +419,13 @@ class Bot_Func:
             await user_msg.reply(f"An error occurred: {e}")
             return
 
-        # Resolve actual file path: prefer postprocessor-hook result, then
-        # progress-hook result, then glob fallback.
-        resolved: str = ""
-        if finished_file and os.path.exists(finished_file):
-            resolved = finished_file
-        else:
-            base_path = _strip_outtmpl_vars(loc_video)
-            if base_path.endswith("/"):
-                # Template was directory-only — pick newest non-part file in dir
-                candidates = [
-                    f
-                    for f in glob.glob(os.path.join(base_path, "*"))
-                    if not f.endswith(".part") and os.path.isfile(f)
-                ]
-                if candidates:
-                    resolved = max(candidates, key=os.path.getmtime)
-            elif base_path:
-                loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
-                if loc_match:
-                    resolved = loc_match[0]
-
+        # Resolve actual file path (hook result first, then glob fallback).
+        resolved = self._resolve_downloaded_file(loc_video, finished_file)
         if not resolved:
             self.log.error(f"Download finished but file not found. {loc_video=}")
+            self._record_download_issue(
+                med_url, "file_not_found", media_info=media_info, chat_id=chat_id
+            )
             await user_msg.reply(f"Download finished but file not found. {loc_video=}")
             return
         loc_video = resolved
