@@ -250,8 +250,9 @@ class Bot_Func:
         audioless download, so the problem can be understood and reproduced."""
         try:
             vcodec, acodec = _codecs_of(media_info)
-            src = (media_info or {}).get("requested_downloads") or [{}]
-            src = src[0] or (media_info or {})
+            src = ((media_info or {}).get("requested_downloads") or [{}])[0] or (
+                media_info or {}
+            )
             record = {
                 "ts": datetime.now().isoformat(timespec="seconds"),
                 "reason": reason,
