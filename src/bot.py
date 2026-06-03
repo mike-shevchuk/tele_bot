@@ -14,6 +14,35 @@ from aiogram import types
 
 LIMIT_SIZE_UPL_VIDEO = 49
 
+# How many times to retry a download when a *transient* error happens
+# (e.g. TikTok "rehydration" extraction flakiness — the same link often
+# succeeds on the next attempt). Backoff grows: RETRY_BASE_DELAY * attempt.
+MAX_DOWNLOAD_ATTEMPTS = 4
+RETRY_BASE_DELAY = 1.5
+
+# Substrings that mark a *temporary* failure worth retrying. Anything else
+# (private/removed video, unsupported URL, ...) fails immediately.
+_RETRIABLE_MARKERS = (
+    "rehydration",
+    "universal data",
+    "unable to extract",
+    "unable to download webpage",
+    "challenge",
+    "timed out",
+    "timeout",
+    "connection",
+    "temporarily",
+    "http error 5",
+    "read timed out",
+)
+
+
+def _is_retriable_error(msg: str) -> bool:
+    """True if the yt-dlp error message looks like a transient, retriable one."""
+    low = msg.lower()
+    return any(marker in low for marker in _RETRIABLE_MARKERS)
+
+
 vid_format_dict = {
     "audio only": "🎧",
     "256x144": "144p",
@@ -210,14 +239,56 @@ class Bot_Func:
                     pass
 
             ydl_opts_with_hook = {
+                # Network/extractor robustness defaults — caller's ydl_opts may
+                # override any of these via the spread below.
+                "retries": 5,
+                "fragment_retries": 5,
+                "extractor_retries": 3,
+                "socket_timeout": 30,
                 **ydl_opts,
                 "progress_hooks": [progress_hook],
                 "postprocessor_hooks": [pp_hook],
             }
 
             def download():
-                with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
-                    return ydl.extract_info(med_url, download=True)
+                # Retry transient failures (TikTok rehydration flakiness, timeouts,
+                # transient network errors). The same link that fails once usually
+                # succeeds on the next attempt — see logs in the bug report.
+                base = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
+                last_err = None
+                for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
+                            return ydl.extract_info(med_url, download=True)
+                    except yt_dlp.utils.DownloadError as e:
+                        last_err = e
+                        if attempt >= MAX_DOWNLOAD_ATTEMPTS or not _is_retriable_error(
+                            str(e)
+                        ):
+                            raise
+                        self.log.warning(
+                            f"⚠️ Download attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS} "
+                            f"failed (retriable), retrying: {e}"
+                        )
+                        # Let the user know we're retrying (best-effort).
+                        asyncio.run_coroutine_threadsafe(
+                            _edit_progress(
+                                f"⚠️ Спроба {attempt} не вдалась, пробую ще раз…"
+                            ),
+                            loop,
+                        )
+                        # Drop half-downloaded leftovers before the next attempt.
+                        if base:
+                            for leftover in glob.glob(glob.escape(base) + "*"):
+                                if leftover.endswith((".part", ".ytdl")):
+                                    try:
+                                        os.remove(leftover)
+                                    except OSError:
+                                        pass
+                        time.sleep(RETRY_BASE_DELAY * attempt)
+                # Exhausted retries — re-raise for the outer DownloadError handler.
+                if last_err:
+                    raise last_err
 
             media_info = await asyncio.to_thread(download)
             await strt_dwn_msg.delete()

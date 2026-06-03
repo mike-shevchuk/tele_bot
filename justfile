@@ -4,6 +4,12 @@ setup:
     git config --unset-all core.hooksPath || true
     pre-commit install
 
+# Run the bot. Auto-updates yt-dlp first so the TikTok/Instagram/YouTube
+# extractors stay fresh (they break often and are fixed by yt-dlp releases).
+run:
+    pip install -U yt-dlp
+    python main.py
+
 # Lint: blocking errors only (same as CI)
 lint:
     ruff check --select E9,F63,F7,F82 .

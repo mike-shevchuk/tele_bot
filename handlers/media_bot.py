@@ -182,7 +182,7 @@ async def handle_inline_download(
 
     status_msg = await bot.send_message(user_id, "Start downloading ...")
 
-    loc_media = f"media/{user_id}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    loc_media = f"media/{user_id}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.%(ext)s"
     ydl_opts = {**_YDL_OPTS_BY_MODE[mode], "outtmpl": loc_media}
 
     res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
