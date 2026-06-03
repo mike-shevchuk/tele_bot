@@ -114,7 +114,8 @@ class Bot_Func:
             return path
         rd = (media_info.get("requested_downloads") or [{}])[0]
         vcodec = ((rd.get("vcodec") or media_info.get("vcodec")) or "").lower()
-        if not vcodec or vcodec.startswith(self._APPLE_VCODECS):
+        # "none" == audio-only download (mp3 etc.): nothing to transcode.
+        if not vcodec or vcodec == "none" or vcodec.startswith(self._APPLE_VCODECS):
             return path  # already fine
 
         self.log.warning(
@@ -158,7 +159,13 @@ class Bot_Func:
     def extract_video_info(self, url):
         """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
-            with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
+            opts = {
+                "quiet": True,
+                "skip_download": True,
+                "extractor_retries": 3,
+                "socket_timeout": 30,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return {
                     "thumbnail": info.get("thumbnail", ""),
