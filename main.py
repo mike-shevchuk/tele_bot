@@ -168,7 +168,7 @@ async def handle_inst_tick(message: types.Message, cfg):
         "outtmpl": loc_video,
     }
 
-    res = await bot_func.get_dwn_media(ydl_opts, message)
+    res = await bot_func.get_dwn_media(ydl_opts, message, user_id=user.id)
     if not res:
         await message.answer(
             "Не вдалося завантажити. Перевір посилання і спробуй ще раз."

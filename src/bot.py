@@ -244,10 +244,13 @@ class Bot_Func:
         return ""
 
     def _record_download_issue(
-        self, url, reason, media_info=None, error=None, chat_id=None
+        self, url, reason, media_info=None, error=None, chat_id=None, user_id=None
     ) -> None:
         """Append a JSONL record (logs/download_issues.jsonl) for a failed or
-        audioless download, so the problem can be understood and reproduced."""
+        audioless download, so the problem can be understood and reproduced.
+
+        ``chat_id`` is where it happened (may be a group); ``user_id`` is who
+        triggered it (the real person, passed in by the handler)."""
         try:
             vcodec, acodec = _codecs_of(media_info)
             src = ((media_info or {}).get("requested_downloads") or [{}])[0] or (
@@ -258,6 +261,7 @@ class Bot_Func:
                 "reason": reason,
                 "url": url,
                 "error": str(error) if error else None,
+                "user_id": user_id,
                 "chat_id": chat_id,
                 "yt_dlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
                 "extractor": (media_info or {}).get("extractor_key"),
@@ -275,10 +279,12 @@ class Bot_Func:
         except Exception as e:
             self.log.error(f"Failed to record download issue: {e}")
 
-    async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink=""):
+    async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink="", user_id=None):
         med_url = youtubeLink if youtubeLink else user_msg.text
 
         loc_video = ydl_opts["outtmpl"]
+        # chat_id = where it happened (can be a group); user_id = who (passed by
+        # the handler, since for bot-sent messages user_msg.from_user is the bot).
         chat_id = getattr(getattr(user_msg, "chat", None), "id", None)
 
         strt_dwn_msg = None
@@ -385,6 +391,7 @@ class Bot_Func:
                     "video_without_audio",
                     media_info=media_info,
                     chat_id=chat_id,
+                    user_id=user_id,
                 )
                 silent = self._resolve_downloaded_file(loc_video, finished_file)
                 if silent:
@@ -396,6 +403,19 @@ class Bot_Func:
                     "format": "best[acodec!=none][vcodec!=none]/best",
                 }
                 media_info = await asyncio.to_thread(download, combined_opts)
+                # If the combined refetch is *still* silent, don't let it pass
+                # unnoticed — record it so the blind spot stays diagnosable.
+                if _is_video_without_audio(media_info):
+                    self.log.error(
+                        "❌ Still no audio after combined-format refetch"
+                    )
+                    self._record_download_issue(
+                        med_url,
+                        "still_no_audio_after_recovery",
+                        media_info=media_info,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                    )
 
             await strt_dwn_msg.delete()
             self.log.success(f"✅ Download successful! {loc_video}")
@@ -408,6 +428,7 @@ class Bot_Func:
                 media_info=media_info,
                 error=e,
                 chat_id=chat_id,
+                user_id=user_id,
             )
             if strt_dwn_msg:
                 await strt_dwn_msg.delete()
@@ -425,7 +446,11 @@ class Bot_Func:
         if not resolved:
             self.log.error(f"Download finished but file not found. {loc_video=}")
             self._record_download_issue(
-                med_url, "file_not_found", media_info=media_info, chat_id=chat_id
+                med_url,
+                "file_not_found",
+                media_info=media_info,
+                chat_id=chat_id,
+                user_id=user_id,
             )
             await user_msg.reply(f"Download finished but file not found. {loc_video=}")
             return

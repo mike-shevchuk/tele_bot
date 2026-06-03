@@ -93,7 +93,9 @@ async def handle_callback(
         # 'outtmpl': '%(title)s.%(ext)s'
     }
 
-    res = await bot_func.get_dwn_media(ydl_opts, bot_msg, youtubeLink=youtube_url)
+    res = await bot_func.get_dwn_media(
+        ydl_opts, bot_msg, youtubeLink=youtube_url, user_id=user_bot.id
+    )
     if not res:
         await bot_msg.answer(
             "Не вдалося завантажити. Перевір посилання і спробуй ще раз."
@@ -185,7 +187,9 @@ async def handle_inline_download(
     loc_media = f"media/{user_id}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.%(ext)s"
     ydl_opts = {**_YDL_OPTS_BY_MODE[mode], "outtmpl": loc_media}
 
-    res = await bot_func.get_dwn_media(ydl_opts, status_msg, youtubeLink=url)
+    res = await bot_func.get_dwn_media(
+        ydl_opts, status_msg, youtubeLink=url, user_id=user_id
+    )
     await status_msg.delete()
     if not res:
         await bot.send_message(
