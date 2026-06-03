@@ -134,8 +134,8 @@ async def handle_callback(
         ut.update_row(user)
     except Exception as e:
         await bot_msg.reply(f"An error occurred while sending the video: {e}")
-
-    ut.delete_video_file(loc_media)
+    finally:
+        ut.delete_video_file(loc_media)
 
     await bot_msg.delete()
     await info_wait_button.delete()
