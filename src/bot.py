@@ -7,6 +7,11 @@ import re
 from datetime import datetime
 from pathlib import Path
 import yt_dlp
+from src.download_errors import (
+    classify_download_error,
+    is_retriable_error,
+    ERROR_USER_MESSAGES,
+)
 import os
 import asyncio
 import time
@@ -21,28 +26,6 @@ LIMIT_SIZE_UPL_VIDEO = 49
 # succeeds on the next attempt). Backoff grows: RETRY_BASE_DELAY * attempt.
 MAX_DOWNLOAD_ATTEMPTS = 4
 RETRY_BASE_DELAY = 1.5
-
-# Substrings that mark a *temporary* failure worth retrying. Anything else
-# (private/removed video, unsupported URL, ...) fails immediately.
-_RETRIABLE_MARKERS = (
-    "rehydration",
-    "universal data",
-    "unable to extract",
-    "unable to download webpage",
-    "challenge",
-    "timed out",
-    "timeout",
-    "connection",
-    "temporarily",
-    "http error 5",
-    "read timed out",
-)
-
-
-def _is_retriable_error(msg: str) -> bool:
-    """True if the yt-dlp error message looks like a transient, retriable one."""
-    low = msg.lower()
-    return any(marker in low for marker in _RETRIABLE_MARKERS)
 
 
 # Network/extractor robustness defaults shared by every yt-dlp call.
@@ -248,14 +231,24 @@ class Bot_Func:
         return ""
 
     def _record_download_issue(
-        self, url, reason, media_info=None, error=None, chat_id=None, user_id=None
+        self,
+        url,
+        reason,
+        media_info=None,
+        error=None,
+        chat_id=None,
+        user_id=None,
+        kind=None,
     ) -> None:
         """Append a JSONL record (logs/download_issues.jsonl) for a failed or
         audioless download, so the problem can be understood and reproduced.
 
         ``chat_id`` is where it happened (may be a group); ``user_id`` is who
-        triggered it (the real person, passed in by the handler)."""
+        triggered it (the real person, passed in by the handler). ``kind`` is the
+        pre-classified DownloadErrorKind; if omitted it's derived from ``error``."""
         try:
+            if kind is None and error is not None:
+                kind = classify_download_error(str(error))
             vcodec, acodec = _codecs_of(media_info)
             src = _source_stream_dict(media_info)
             record = {
@@ -263,6 +256,7 @@ class Bot_Func:
                 "reason": reason,
                 "url": url,
                 "error": str(error) if error else None,
+                "kind": kind.value if kind else None,
                 "user_id": user_id,
                 "chat_id": chat_id,
                 "yt_dlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
@@ -361,7 +355,7 @@ class Bot_Func:
                         with yt_dlp.YoutubeDL(opts) as ydl:
                             return ydl.extract_info(med_url, download=True)
                     except yt_dlp.utils.DownloadError as e:
-                        if attempt >= MAX_DOWNLOAD_ATTEMPTS or not _is_retriable_error(
+                        if attempt >= MAX_DOWNLOAD_ATTEMPTS or not is_retriable_error(
                             str(e)
                         ):
                             raise
@@ -423,7 +417,8 @@ class Bot_Func:
             self.log.success(f"✅ Download successful! {loc_video}")
             self._log_media_info(media_info)
         except yt_dlp.utils.DownloadError as e:
-            self.log.error(f"❌ Download error: {e}")
+            kind = classify_download_error(str(e))
+            self.log.error(f"❌ Download error [{kind.value}]: {e}")
             self._record_download_issue(
                 med_url,
                 "download_error",
@@ -431,10 +426,11 @@ class Bot_Func:
                 error=e,
                 chat_id=chat_id,
                 user_id=user_id,
+                kind=kind,
             )
             if strt_dwn_msg:
                 await strt_dwn_msg.delete()
-            await user_msg.reply(f"Download error: {e}")
+            await user_msg.reply(ERROR_USER_MESSAGES.get(kind, f"Download error: {e}"))
             return
         except Exception as e:
             self.log.error(f"❌ An error occurred: {e}")
