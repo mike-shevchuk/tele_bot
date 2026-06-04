@@ -1,4 +1,3 @@
-from datetime import datetime
 import os
 from pathlib import Path
 
@@ -153,15 +152,23 @@ async def handle_inst_tick(message: types.Message, cfg):
         )
         return
 
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    loc_video = f"media/{user.id}/{current_date}.%(ext)s"
+    loc_video = f"media/{user.id}/%(title)s.%(ext)s"
 
     ydl_opts = {
-        "format": "bestvideo+bestaudio/best",
+        # Prefer H.264 + AAC. format_sort ranks h264 highest so the
+        # bestvideo fallback also picks H.264 when available.
+        # _ensure_h264() transcodes as a last resort if only VP9/AV1 exist.
+        "format": (
+            "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/bestvideo+bestaudio/best"
+        ),
+        "format_sort": ["vcodec:h264"],
+        "merge_output_format": "mp4",
         "outtmpl": loc_video,
     }
 
-    res = await bot_func.get_dwn_media(ydl_opts, message)
+    res = await bot_func.get_dwn_media(ydl_opts, message, user_id=user.id)
     if not res:
         await message.answer(
             "Не вдалося завантажити. Перевір посилання і спробуй ще раз."

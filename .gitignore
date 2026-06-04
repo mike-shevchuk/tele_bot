@@ -180,3 +180,6 @@ assets
 **/*test*.py
 data/reg_user.csv
 .vscode
+
+# Project unit tests are versioned (override the generic *test*.py rules above)
+!tests/**/*.py
