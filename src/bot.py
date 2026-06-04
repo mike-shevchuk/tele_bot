@@ -44,87 +44,68 @@ class DownloadErrorKind(Enum):
 # Ordered most-specific → most-generic: the first kind with a matching
 # substring wins, so AGE/LOGIN/UNAVAILABLE are checked before the broad
 # EXTRACTION markers. Match is a case-insensitive substring of the message.
-_ERROR_KIND_MARKERS: tuple[tuple[DownloadErrorKind, tuple[str, ...]], ...] = (
-    (
-        DownloadErrorKind.AGE_RESTRICTED,
-        (
-            "confirm your age",
-            "age-restricted",
-            "age restricted",
-            "inappropriate for some users",
-        ),
+_ERROR_KIND_MARKERS: dict[DownloadErrorKind, tuple[str, ...]] = {
+    DownloadErrorKind.AGE_RESTRICTED: (
+        "confirm your age",
+        "age-restricted",
+        "age restricted",
+        "inappropriate for some users",
     ),
-    (
-        DownloadErrorKind.LOGIN_REQUIRED,
-        (
-            "sign in to confirm you're not a bot",
-            "sign in",
-            "log in to",
-            "login required",
-            "requires authentication",
-            "private video",
-            "this video is private",
-            "this account is private",
-            "use --cookies",
-        ),
+    DownloadErrorKind.LOGIN_REQUIRED: (
+        "sign in to confirm you're not a bot",
+        "sign in",
+        "log in to",
+        "login required",
+        "requires authentication",
+        "private video",
+        "this video is private",
+        "this account is private",
+        "use --cookies",
     ),
-    (
-        DownloadErrorKind.GEO_BLOCKED,
-        (
-            "not available in your country",
-            "in your country",
-            "geo restricted",
-            "geo-restricted",
-        ),
+    DownloadErrorKind.GEO_BLOCKED: (
+        "not available in your country",
+        "in your country",
+        "geo restricted",
+        "geo-restricted",
     ),
-    (
-        DownloadErrorKind.RATE_LIMITED,
-        ("http error 429", "too many requests", "rate-limit", "rate limit"),
+    DownloadErrorKind.RATE_LIMITED: (
+        "http error 429",
+        "too many requests",
+        "rate-limit",
+        "rate limit",
     ),
-    (
-        DownloadErrorKind.UNAVAILABLE,
-        (
-            "video unavailable",
-            "no longer available",
-            "has been removed",
-            "was deleted",
-            "this post may not be available",
-            "http error 404",
-            "account has been terminated",
-        ),
+    DownloadErrorKind.UNAVAILABLE: (
+        "video unavailable",
+        "no longer available",
+        "has been removed",
+        "was deleted",
+        "this post may not be available",
+        "http error 404",
+        "account has been terminated",
     ),
-    (
-        DownloadErrorKind.UNSUPPORTED,
-        (
-            "unsupported url",
-            "no suitable extractor",
-            "no video formats found",
-            "is not a valid url",
-        ),
+    DownloadErrorKind.UNSUPPORTED: (
+        "unsupported url",
+        "no suitable extractor",
+        "no video formats found",
+        "is not a valid url",
     ),
-    (
-        DownloadErrorKind.NETWORK,
-        (
-            "timed out",
-            "timeout",
-            "read timed out",
-            "connection",
-            "temporarily",
-            "http error 5",
-            "remote end closed",
-        ),
+    DownloadErrorKind.NETWORK: (
+        "timed out",
+        "timeout",
+        "read timed out",
+        "connection",
+        "temporarily",
+        "http error 5",
+        "remote end closed",
     ),
-    (
-        DownloadErrorKind.EXTRACTION,
-        (
-            "rehydration",
-            "universal data",
-            "unable to extract",
-            "unable to download webpage",
-            "challenge",
-        ),
+    DownloadErrorKind.EXTRACTION: (
+        "rehydration",
+        "universal data",
+        "unable to extract",
+        "unable to download webpage",
+        "challenge",
     ),
-)
+}
 
 # Kinds where retrying has a real chance of succeeding.
 _RETRIABLE_KINDS = frozenset(
@@ -164,7 +145,7 @@ _ERROR_USER_MESSAGES = {
 def classify_download_error(msg: str) -> DownloadErrorKind:
     """Map a yt-dlp error message to a DownloadErrorKind (first match wins)."""
     low = msg.lower()
-    for kind, markers in _ERROR_KIND_MARKERS:
+    for kind, markers in _ERROR_KIND_MARKERS.items():
         if any(marker in low for marker in markers):
             return kind
     return DownloadErrorKind.UNKNOWN
@@ -173,12 +154,6 @@ def classify_download_error(msg: str) -> DownloadErrorKind:
 def _is_retriable_error(msg: str) -> bool:
     """True if the error is a transient kind worth retrying."""
     return classify_download_error(msg) in _RETRIABLE_KINDS
-
-
-def _user_message_for_error(error) -> str:
-    """A friendly, kind-aware Ukrainian message for a download error."""
-    kind = classify_download_error(str(error))
-    return _ERROR_USER_MESSAGES.get(kind, f"Download error: {error}")
 
 
 # Network/extractor robustness defaults shared by every yt-dlp call.
@@ -384,14 +359,24 @@ class Bot_Func:
         return ""
 
     def _record_download_issue(
-        self, url, reason, media_info=None, error=None, chat_id=None, user_id=None
+        self,
+        url,
+        reason,
+        media_info=None,
+        error=None,
+        chat_id=None,
+        user_id=None,
+        kind=None,
     ) -> None:
         """Append a JSONL record (logs/download_issues.jsonl) for a failed or
         audioless download, so the problem can be understood and reproduced.
 
         ``chat_id`` is where it happened (may be a group); ``user_id`` is who
-        triggered it (the real person, passed in by the handler)."""
+        triggered it (the real person, passed in by the handler). ``kind`` is the
+        pre-classified DownloadErrorKind; if omitted it's derived from ``error``."""
         try:
+            if kind is None and error is not None:
+                kind = classify_download_error(str(error))
             vcodec, acodec = _codecs_of(media_info)
             src = _source_stream_dict(media_info)
             record = {
@@ -399,7 +384,7 @@ class Bot_Func:
                 "reason": reason,
                 "url": url,
                 "error": str(error) if error else None,
-                "kind": classify_download_error(str(error)).value if error else None,
+                "kind": kind.value if kind else None,
                 "user_id": user_id,
                 "chat_id": chat_id,
                 "yt_dlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
@@ -560,7 +545,8 @@ class Bot_Func:
             self.log.success(f"✅ Download successful! {loc_video}")
             self._log_media_info(media_info)
         except yt_dlp.utils.DownloadError as e:
-            self.log.error(f"❌ Download error [{classify_download_error(str(e)).value}]: {e}")
+            kind = classify_download_error(str(e))
+            self.log.error(f"❌ Download error [{kind.value}]: {e}")
             self._record_download_issue(
                 med_url,
                 "download_error",
@@ -568,10 +554,11 @@ class Bot_Func:
                 error=e,
                 chat_id=chat_id,
                 user_id=user_id,
+                kind=kind,
             )
             if strt_dwn_msg:
                 await strt_dwn_msg.delete()
-            await user_msg.reply(_user_message_for_error(e))
+            await user_msg.reply(_ERROR_USER_MESSAGES.get(kind, f"Download error: {e}"))
             return
         except Exception as e:
             self.log.error(f"❌ An error occurred: {e}")
