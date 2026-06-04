@@ -1,6 +1,8 @@
 # import utils as ut
 from src import utils as ut
+import contextlib
 import glob
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +15,83 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram import types
 
 LIMIT_SIZE_UPL_VIDEO = 49
+
+# How many times to retry a download when a *transient* error happens
+# (e.g. TikTok "rehydration" extraction flakiness — the same link often
+# succeeds on the next attempt). Backoff grows: RETRY_BASE_DELAY * attempt.
+MAX_DOWNLOAD_ATTEMPTS = 4
+RETRY_BASE_DELAY = 1.5
+
+# Substrings that mark a *temporary* failure worth retrying. Anything else
+# (private/removed video, unsupported URL, ...) fails immediately.
+_RETRIABLE_MARKERS = (
+    "rehydration",
+    "universal data",
+    "unable to extract",
+    "unable to download webpage",
+    "challenge",
+    "timed out",
+    "timeout",
+    "connection",
+    "temporarily",
+    "http error 5",
+    "read timed out",
+)
+
+
+def _is_retriable_error(msg: str) -> bool:
+    """True if the yt-dlp error message looks like a transient, retriable one."""
+    low = msg.lower()
+    return any(marker in low for marker in _RETRIABLE_MARKERS)
+
+
+# Network/extractor robustness defaults shared by every yt-dlp call.
+_YDL_ROBUSTNESS_OPTS = {
+    "retries": 5,
+    "fragment_retries": 5,
+    "extractor_retries": 3,
+    "socket_timeout": 30,
+}
+
+
+def _strip_outtmpl_vars(template: str) -> str:
+    """Strip yt-dlp template vars (e.g. ".%(ext)s") to get the base path/prefix."""
+    return re.sub(r"\.?%\([^)]+\)s", "", template)
+
+
+def _cleanup_partial_downloads(base: str) -> None:
+    """Remove ``.part``/``.ytdl`` artifacts left by an interrupted yt-dlp run."""
+    if not base:
+        return
+    for leftover in glob.glob(glob.escape(base) + "*"):
+        if leftover.endswith((".part", ".ytdl")):
+            with contextlib.suppress(OSError):
+                os.remove(leftover)
+
+
+def _source_stream_dict(media_info: dict | None) -> dict:
+    """The actually-downloaded stream dict. yt-dlp puts merged/remuxed stream
+    data under ``requested_downloads[0]``; fall back to the top-level info."""
+    if not media_info:
+        return {}
+    return (media_info.get("requested_downloads") or [{}])[0] or media_info
+
+
+def _codecs_of(media_info: dict | None) -> tuple[str, str]:
+    """Return (vcodec, acodec) of the actually-downloaded stream, lowercased."""
+    if not media_info:
+        return "", ""
+    src = _source_stream_dict(media_info)
+    vcodec = ((src.get("vcodec") or media_info.get("vcodec")) or "").lower()
+    acodec = ((src.get("acodec") or media_info.get("acodec")) or "").lower()
+    return vcodec, acodec
+
+
+def _is_video_without_audio(media_info: dict | None) -> bool:
+    """True only when we *know* it's a video stream with no audio track."""
+    vcodec, acodec = _codecs_of(media_info)
+    return vcodec not in ("", "none") and acodec == "none"
+
 
 vid_format_dict = {
     "audio only": "🎧",
@@ -47,11 +126,7 @@ class Bot_Func:
         """Log codec/resolution/bitrate and return the same text for sidecar writing."""
         if not info:
             return ""
-        # For merged/remuxed formats the final stream data lives under
-        # requested_downloads[0]; fall back to top-level info_dict fields.
-        rd = (info.get("requested_downloads") or [{}])[0]
-        src = rd if rd else info
-
+        src = _source_stream_dict(info)
         vcodec = src.get("vcodec") or info.get("vcodec", "?")
         acodec = src.get("acodec") or info.get("acodec", "?")
         width = src.get("width") or info.get("width")
@@ -83,9 +158,9 @@ class Bot_Func:
         """Transcode to H.264/AAC if the video codec is not Apple-compatible."""
         if not media_info:
             return path
-        rd = (media_info.get("requested_downloads") or [{}])[0]
-        vcodec = ((rd.get("vcodec") or media_info.get("vcodec")) or "").lower()
-        if not vcodec or vcodec.startswith(self._APPLE_VCODECS):
+        vcodec, _ = _codecs_of(media_info)
+        # "none" == audio-only download (mp3 etc.): nothing to transcode.
+        if not vcodec or vcodec == "none" or vcodec.startswith(self._APPLE_VCODECS):
             return path  # already fine
 
         self.log.warning(
@@ -129,7 +204,8 @@ class Bot_Func:
     def extract_video_info(self, url):
         """Extract video metadata (title, thumbnail, duration). Blocking."""
         try:
-            with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
+            opts = {"quiet": True, "skip_download": True, **_YDL_ROBUSTNESS_OPTS}
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return {
                     "thumbnail": info.get("thumbnail", ""),
@@ -152,10 +228,66 @@ class Bot_Func:
             self.log.error(f"YouTube search error: {e}")
             return []
 
-    async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink=""):
+    def _resolve_downloaded_file(self, outtmpl: str, finished_file: str) -> str:
+        """Find the real downloaded file: hook result first, then glob fallback."""
+        if finished_file and os.path.exists(finished_file):
+            return finished_file
+        base_path = _strip_outtmpl_vars(outtmpl)
+        if base_path.endswith("/"):
+            # Template was directory-only — pick newest non-part file in dir.
+            candidates = [
+                f
+                for f in glob.glob(os.path.join(base_path, "*"))
+                if not f.endswith(".part") and os.path.isfile(f)
+            ]
+            return max(candidates, key=os.path.getmtime) if candidates else ""
+        if base_path:
+            loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
+            if loc_match:
+                return loc_match[0]
+        return ""
+
+    def _record_download_issue(
+        self, url, reason, media_info=None, error=None, chat_id=None, user_id=None
+    ) -> None:
+        """Append a JSONL record (logs/download_issues.jsonl) for a failed or
+        audioless download, so the problem can be understood and reproduced.
+
+        ``chat_id`` is where it happened (may be a group); ``user_id`` is who
+        triggered it (the real person, passed in by the handler)."""
+        try:
+            vcodec, acodec = _codecs_of(media_info)
+            src = _source_stream_dict(media_info)
+            record = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "reason": reason,
+                "url": url,
+                "error": str(error) if error else None,
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "yt_dlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
+                "extractor": (media_info or {}).get("extractor_key"),
+                "format_id": src.get("format_id"),
+                "vcodec": vcodec or None,
+                "acodec": acodec or None,
+                "ext": src.get("ext"),
+                "filesize": src.get("filesize") or src.get("filesize_approx"),
+            }
+            path = self.root_prj / "logs" / "download_issues.jsonl"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            self.log.info(f"📝 Recorded download issue ({reason}) → {path}")
+        except Exception as e:
+            self.log.error(f"Failed to record download issue: {e}")
+
+    async def get_dwn_media(self, ydl_opts, user_msg, youtubeLink="", user_id=None):
         med_url = youtubeLink if youtubeLink else user_msg.text
 
         loc_video = ydl_opts["outtmpl"]
+        # chat_id = where it happened (can be a group); user_id = who (passed by
+        # the handler, since for bot-sent messages user_msg.from_user is the bot).
+        chat_id = getattr(getattr(user_msg, "chat", None), "id", None)
 
         strt_dwn_msg = None
         finished_file: str = ""
@@ -210,21 +342,96 @@ class Bot_Func:
                     pass
 
             ydl_opts_with_hook = {
+                # Robustness defaults — caller's ydl_opts may override via spread.
+                **_YDL_ROBUSTNESS_OPTS,
                 **ydl_opts,
                 "progress_hooks": [progress_hook],
                 "postprocessor_hooks": [pp_hook],
             }
 
-            def download():
-                with yt_dlp.YoutubeDL(ydl_opts_with_hook) as ydl:
-                    return ydl.extract_info(med_url, download=True)
+            def download(opts):
+                # Retry transient failures (TikTok rehydration flakiness, timeouts,
+                # transient network errors). The same link that fails once usually
+                # succeeds on the next attempt — see logs in the bug report. The
+                # final attempt re-raises (attempt >= MAX), so the loop never falls
+                # through.
+                base = _strip_outtmpl_vars(loc_video)
+                for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+                    try:
+                        with yt_dlp.YoutubeDL(opts) as ydl:
+                            return ydl.extract_info(med_url, download=True)
+                    except yt_dlp.utils.DownloadError as e:
+                        if attempt >= MAX_DOWNLOAD_ATTEMPTS or not _is_retriable_error(
+                            str(e)
+                        ):
+                            raise
+                        self.log.warning(
+                            f"⚠️ Download attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS} "
+                            f"failed (retriable), retrying: {e}"
+                        )
+                        # Let the user know we're retrying (best-effort).
+                        asyncio.run_coroutine_threadsafe(
+                            _edit_progress(
+                                f"⚠️ Спроба {attempt} не вдалась, пробую ще раз…"
+                            ),
+                            loop,
+                        )
+                        _cleanup_partial_downloads(base)
+                        time.sleep(RETRY_BASE_DELAY * attempt)
 
-            media_info = await asyncio.to_thread(download)
+            media_info = await asyncio.to_thread(download, ydl_opts_with_hook)
+
+            # Some sites (notably TikTok) occasionally hand back a video-only
+            # stream, so the result has no sound. Re-fetch once forcing a
+            # combined audio+video format. (Bug report: "sometimes no audio".)
+            if _is_video_without_audio(media_info):
+                self.log.warning(
+                    "⚠️ Downloaded video has no audio — refetching combined format"
+                )
+                self._record_download_issue(
+                    med_url,
+                    "video_without_audio",
+                    media_info=media_info,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                )
+                silent = self._resolve_downloaded_file(loc_video, finished_file)
+                if silent:
+                    ut.delete_video_file(silent)
+                _cleanup_partial_downloads(_strip_outtmpl_vars(loc_video))
+                finished_file = ""
+                combined_opts = {
+                    **ydl_opts_with_hook,
+                    "format": "best[acodec!=none][vcodec!=none]/best",
+                }
+                media_info = await asyncio.to_thread(download, combined_opts)
+                # If the combined refetch is *still* silent, don't let it pass
+                # unnoticed — record it so the blind spot stays diagnosable.
+                if _is_video_without_audio(media_info):
+                    self.log.error(
+                        "❌ Still no audio after combined-format refetch"
+                    )
+                    self._record_download_issue(
+                        med_url,
+                        "still_no_audio_after_recovery",
+                        media_info=media_info,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                    )
+
             await strt_dwn_msg.delete()
             self.log.success(f"✅ Download successful! {loc_video}")
             self._log_media_info(media_info)
         except yt_dlp.utils.DownloadError as e:
             self.log.error(f"❌ Download error: {e}")
+            self._record_download_issue(
+                med_url,
+                "download_error",
+                media_info=media_info,
+                error=e,
+                chat_id=chat_id,
+                user_id=user_id,
+            )
             if strt_dwn_msg:
                 await strt_dwn_msg.delete()
             await user_msg.reply(f"Download error: {e}")
@@ -236,29 +443,17 @@ class Bot_Func:
             await user_msg.reply(f"An error occurred: {e}")
             return
 
-        # Resolve actual file path: prefer postprocessor-hook result, then
-        # progress-hook result, then glob fallback.
-        resolved: str = ""
-        if finished_file and os.path.exists(finished_file):
-            resolved = finished_file
-        else:
-            base_path = re.sub(r"\.?%\([^)]+\)s", "", loc_video)
-            if base_path.endswith("/"):
-                # Template was directory-only — pick newest non-part file in dir
-                candidates = [
-                    f
-                    for f in glob.glob(os.path.join(base_path, "*"))
-                    if not f.endswith(".part") and os.path.isfile(f)
-                ]
-                if candidates:
-                    resolved = max(candidates, key=os.path.getmtime)
-            elif base_path:
-                loc_match = glob.glob(os.path.join(".", glob.escape(base_path) + "*"))
-                if loc_match:
-                    resolved = loc_match[0]
-
+        # Resolve actual file path (hook result first, then glob fallback).
+        resolved = self._resolve_downloaded_file(loc_video, finished_file)
         if not resolved:
             self.log.error(f"Download finished but file not found. {loc_video=}")
+            self._record_download_issue(
+                med_url,
+                "file_not_found",
+                media_info=media_info,
+                chat_id=chat_id,
+                user_id=user_id,
+            )
             await user_msg.reply(f"Download finished but file not found. {loc_video=}")
             return
         loc_video = resolved

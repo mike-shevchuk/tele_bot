@@ -30,6 +30,7 @@ async def check_access(message: types.Message, allowed_levels: list[Level]):
         return None
     return user
 
+
 def _fmt_duration(secs):
     if not secs:
         return ''
@@ -350,6 +351,56 @@ async def cmd_show_users_mb(message: types.Message, logger, cfg):
     except Exception as e:
         logger.exception(f"Проблема при зчитуванні користувачів: {e}")
         await message.reply("❌ Виникла помилка при зчитуванні таблиці користувачів.")
+
+
+@router.message(Command('setlevel'))
+async def cmd_setlevel(message: types.Message, logger, bot: Bot):
+    user = await check_access(message, [Level.admin])
+    if not user:
+        logger.warning('user levele is not admin')
+        return
+    
+    try:
+        args = message.text.split()
+        if len(args) != 3:
+            logger.warning(f'args length doesn\'t equal 3. len(args)= {len(args)}')
+            await message.reply('Формат: /setlevel <user_id> <user_new_level>')
+            return
+        if not args[1].isdigit():
+            logger.warning('user_id is not int.')
+            await message.reply("❌ user_id має бути числом")
+            return
+        
+        target_id = int(args[1])
+        level_name = args[2]
+
+        if level_name not in Level.__members__:
+            levels = ', '.join(Level.__members__)
+            logger.warning('Unknown level.')
+            await message.reply(f'❌ Невідомий рівень. Доступні рівні: {levels}')
+            return
+        
+        new_level = Level[level_name]
+        target_df = ut.get_user_by_id(target_id)
+
+        if target_df.empty:
+            logger.warning('Target user is empty')
+            await message.reply('Незнайдено вказаного користувача')
+            return
+        
+        target_user = ut.pandas2pydentic(target_df)
+        old_level = target_user.level
+        logger.info(f'/setlevel {target_id} ({target_user.full_name}): {old_level.name} -> {new_level.name}')
+        target_user.level = new_level
+        ut.update_row(target_user)
+        try:
+            await bot.send_message(target_id, f'Твій новий рівень: {target_user.level.name}.')
+        except Exception:
+            logger.warning(f'Невдалось повідомити користувача про зміну рівня{target_id}.')
+        await message.reply(f'✅ Рівень користувача {target_user.full_name} змінено на {target_user.level.name}')
+    except Exception:
+        logger.exception(f"Проблема в /setlevel")
+        await message.reply("❌ Виникла несподівана помилка")
 
 
 @router.message(Command('review'))

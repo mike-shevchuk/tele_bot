@@ -4,6 +4,12 @@ setup:
     git config --unset-all core.hooksPath || true
     pre-commit install
 
+# Run the bot. Auto-updates yt-dlp first so the TikTok/Instagram/YouTube
+# extractors stay fresh (they break often and are fixed by yt-dlp releases).
+run:
+    pip install -U yt-dlp
+    python main.py
+
 # Lint: blocking errors only (same as CI)
 lint:
     ruff check --select E9,F63,F7,F82 .
@@ -135,10 +141,10 @@ queue-watch:
              echo 'PWD:' \$(pwd); \
              echo; \
              echo '──── claude output ────'; \
-             claude --output-format stream-json '/review-pr-ukr $pr' 2>&1 \
+             claude --print --output-format stream-json '/review-pr-ukr $pr' 2>&1 \
                | jq -r --unbuffered 'if .type == \"assistant\" then (.message.content[] | select(.type == \"text\") | .text) elif .type == \"result\" then \"\\n✅ Done (exit=\\(.subtype))\" else empty end' 2>/dev/null \
                | awk '{ print strftime(\"[%F %T]\"), \$0; fflush() }'; \
-             rc=\${PIPESTATUS[0]}; \
+             rc=\${PIPESTATUS[0]}; rc=\${rc:-1}; \
              echo; echo \"──── claude exit=\$rc ────\"; \
              jq --arg ts \"\$(date -u +%FT%TZ)\" --argjson rc \$rc --arg log '$log' \
                 '. + {completed_at: \$ts, exit_code: \$rc, status: (if \$rc == 0 then \"success\" else \"failed\" end), log_file: \$log}' \
