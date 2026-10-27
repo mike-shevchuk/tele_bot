@@ -10,6 +10,20 @@ run:
     pip install -U yt-dlp
     python main.py
 
+# Run the Slack bot (Socket Mode, needs SLACK_BOT_TOKEN + SLACK_APP_TOKEN in .env).
+# Can run alongside `just run` — both share the same download core.
+run-slack:
+    @echo "[1/2] updating yt-dlp..." >&2
+    pip install -q -U yt-dlp
+    @echo "[2/2] starting Slack bot (python slack_main.py)..." >&2
+    python slack_main.py
+
+# Run unit tests (pure logic, no network)
+test:
+    @echo "→ running tests..." >&2
+    python tests/test_download_errors.py
+    python tests/test_slack_links.py
+
 # Lint: blocking errors only (same as CI)
 lint:
     ruff check --select E9,F63,F7,F82 .
