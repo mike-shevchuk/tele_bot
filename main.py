@@ -3,6 +3,10 @@ from pathlib import Path
 
 import asyncio
 from dotenv import load_dotenv
+
+# before the handlers: voice_stt reads STT_* from the env at import time
+load_dotenv()
+
 import pandas as pd
 import loguru
 
@@ -20,7 +24,6 @@ from handlers import test_bot, media_bot, voice_stt
 import glob
 
 user_data = {}
-load_dotenv()
 
 API_TOKEN = os.getenv("TOKEN")
 bot = Bot(token=API_TOKEN)
